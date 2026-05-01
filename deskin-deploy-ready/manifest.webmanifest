@@ -1,0 +1,12 @@
+{
+  "name": "DeSkin - Digital Skin Assistant",
+  "short_name": "DeSkin",
+  "description": "Aplikasi skincare berbasis AI untuk analisis kulit, edukasi, konsultasi, market, dan tracking.",
+  "start_url": "/#/dashboard",
+  "display": "standalone",
+  "background_color": "#f6f9fc",
+  "theme_color": "#063b75",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

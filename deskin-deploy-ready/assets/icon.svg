@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title>DeSkin</title>
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#063b75"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#g)"/>
+  <path d="M35 22h34c24 0 40 16 40 42S93 106 69 106H35V22Zm22 20v44h12c12 0 20-8 20-22S81 42 69 42H57Z" fill="#fff"/>
+  <circle cx="42" cy="34" r="8" fill="#f8d84a"/>
+</svg>
