@@ -1,0 +1,12 @@
+{
+  "name": "deskin-deploy-ready",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lightweight deploy-ready static PWA for DeSkin UI/UX.",
+  "scripts": {
+    "serve": "python3 -m http.server 8080",
+    "check": "node --check app.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
