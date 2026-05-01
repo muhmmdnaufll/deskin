@@ -219,7 +219,7 @@
         <div>
           <p class="eyebrow">DeSkin Inc.</p>
           <h2>Digital skin assistant yang ringan dan siap dipakai.</h2>
-          <p>Prototype deploy-ready ini merangkum UI/UX DeSkin: SKINDaily, SKINMap, SKINMarket, SKINEdu, SKINAnalyzer, SKINAnalysis, dan SKINTalk. Semua berjalan di browser dengan localStorage, camera API, geolocation API, dan Web Bluetooth fallback.</p>
+          <p>Prototype ini merangkum fitur-fitur demo DeSkin: SKINDaily, SKINMap, SKINMarket, SKINEdu, SKINAnalyzer, SKINAnalysis, dan SKINTalk. Semua berjalan di browser dengan localStorage, camera API, geolocation API, dan Web Bluetooth fallback.</p>
           <div class="hero-actions">
             <a class="primary-btn" href="#/auth">Mulai sekarang</a>
             <button class="secondary-btn" type="button" id="demoLogin">Masuk demo cepat</button>
