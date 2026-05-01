@@ -1,4 +1,4 @@
-const CACHE_NAME = "deskin-cache-v1";
+const CACHE_NAME = "deskin-cache-v8";
 const ASSETS = [
   "./",
   "./index.html",
