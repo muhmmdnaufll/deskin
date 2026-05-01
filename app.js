@@ -232,7 +232,7 @@
         </div>
       </section>
       <p class="footer-note">Versi ${APP_VERSION}. Data demo dapat direset dari halaman Profil.</p>
-      <p>© <span id="year"></span> Muhammad Naufal. All rights reserved.</p>
+      <p>© <span id="2026"></span> Muhammad Naufal. All rights reserved.</p>
     `;
     $("#demoLogin").addEventListener("click", () => {
       state.authed = true;
