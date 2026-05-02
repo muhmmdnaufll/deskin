@@ -38,7 +38,6 @@
 
     if (route === "#/welcome") {
       setText(".hero h2", "Digital skin assistant untuk rutinitas kulit yang lebih terukur.");
-      setText(".hero p", "DeSkin membantu memantau kondisi kulit, menyusun rutinitas, membaca progres, memberi edukasi, dan menyediakan konsultasi berbasis AI dalam satu aplikasi ringan.");
       setText("#demoLogin", "Masuk");
       setText(".footer-note", "Versi 1.0.6. Data pengguna tersimpan lokal di perangkat.");
     }
