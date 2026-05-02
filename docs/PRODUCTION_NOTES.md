@@ -2,7 +2,7 @@
 
 ## Batasan versi statis
 
-Aplikasi ini bisa langsung dideploy, tetapi beberapa fitur bersifat demo karena belum ada backend dan belum ada perangkat hardware nyata yang disediakan.
+Aplikasi ini bersifat demo karena belum ada backend dan belum ada perangkat hardware nyata yang disediakan.
 
 Yang sudah berjalan secara nyata di browser:
 - Routing SPA.
