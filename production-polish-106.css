@@ -1,0 +1,162 @@
+/* Production polish for DeSkin 1.0.6 */
+.nav a[href="#/map"],
+.nav a[data-path="#/map"],
+#mapVisual,
+#skinMapRealPanel {
+  display: none !important;
+}
+
+:root {
+  --page-max: 1280px;
+}
+
+.card,
+.panel,
+.product-card,
+.article-card,
+.doctor-card,
+.map-card,
+.plan-card {
+  border-color: color-mix(in srgb, var(--line) 82%, transparent);
+}
+
+.card,
+.hero,
+.panel {
+  backdrop-filter: blur(10px);
+}
+
+.primary-btn,
+.secondary-btn,
+.ghost-btn,
+.danger-btn,
+.icon-btn {
+  user-select: none;
+}
+
+.primary-btn:disabled,
+.secondary-btn:disabled,
+.ghost-btn:disabled,
+.danger-btn:disabled {
+  opacity: .58;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.production-status-card {
+  border-color: color-mix(in srgb, var(--primary-2) 28%, var(--line));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--surface) 88%, var(--primary-soft)), var(--surface));
+  box-shadow: var(--shadow-soft);
+}
+
+.production-status-card p {
+  margin: 8px 0 0;
+}
+
+.product-card,
+.article-card,
+.doctor-card,
+.panel,
+.list-item,
+.checkbox {
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.product-card:hover,
+.article-card:hover,
+.doctor-card:hover,
+.panel:hover,
+.list-item:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--primary-2) 34%, var(--line));
+  box-shadow: var(--shadow-soft);
+}
+
+input,
+select,
+textarea {
+  box-shadow: 0 1px 0 rgba(6, 59, 117, .03);
+}
+
+.chat-box {
+  min-height: 420px;
+}
+
+.message {
+  line-height: 1.62;
+}
+
+.camera-box {
+  background: linear-gradient(135deg, var(--surface-2), var(--surface-3));
+}
+
+.capture-overlay {
+  border-color: rgba(255,255,255,.92);
+}
+
+.hero h2,
+.topbar h1,
+.auth-side h2 {
+  text-wrap: balance;
+}
+
+.hero p,
+.muted,
+.panel p {
+  text-wrap: pretty;
+}
+
+@media (max-width: 860px) {
+  .sidebar {
+    max-width: 88vw;
+  }
+
+  .nav {
+    gap: 6px;
+  }
+
+  .nav a {
+    min-height: 48px;
+  }
+
+  .hero-actions,
+  .row {
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 520px) {
+  .card,
+  .panel,
+  .product-card,
+  .article-card,
+  .doctor-card {
+    padding: 15px;
+  }
+
+  .primary-btn,
+  .secondary-btn,
+  .ghost-btn,
+  .danger-btn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .between {
+    align-items: flex-start;
+  }
+
+  .progress-ring {
+    width: 112px;
+  }
+
+  .chat-box {
+    height: 440px;
+  }
+
+  .product-img,
+  .article-img {
+    min-height: 118px;
+  }
+}
