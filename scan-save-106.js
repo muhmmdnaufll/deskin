@@ -6,6 +6,8 @@
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
   let pendingScan = null;
+  let lastImageData = null;
+  let lastMimeType = "image/jpeg";
 
   boot();
 
@@ -21,9 +23,7 @@
     if ($("#realScanPanel")) return;
 
     const form = $("#analysisForm");
-    if (form) {
-      form.remove();
-    }
+    if (form) form.remove();
 
     const grid = $(".container .grid.two");
     if (!grid) return;
@@ -33,17 +33,17 @@
     panel.className = "card stack";
     panel.innerHTML = `
       <div>
-        <p class="eyebrow">Real scan result</p>
-        <h2>Hasil scan wajah</h2>
-        <p class="muted">Gunakan kamera, upload foto, atau detector simulasi. Setelah hasil muncul, simpan ke SKINAnalysis agar fitur AI lain ikut menyesuaikan.</p>
+        <p class="eyebrow">AI vision scan</p>
+        <h2>Hasil scan wajah AI</h2>
+        <p class="muted">Gunakan kamera atau upload foto wajah. DeSkin AI akan menolak gambar yang bukan kulit/wajah jelas, misalnya tembok atau benda.</p>
       </div>
       <div id="scanResultBody" class="stack">
         <div class="panel">
-          <strong>Belum ada hasil scan baru.</strong>
-          <p class="muted">Tekan Capture setelah kamera aktif, upload foto, atau hubungkan detector.</p>
+          <strong>Belum ada hasil scan AI.</strong>
+          <p class="muted">Tekan Capture setelah kamera aktif atau upload foto wajah. Hasil baru bisa disimpan setelah AI selesai menganalisis.</p>
         </div>
       </div>
-      <button id="saveRealScan" class="primary-btn" type="button" disabled>Simpan hasil scan</button>
+      <button id="saveRealScan" class="primary-btn" type="button" disabled>Simpan hasil scan AI</button>
     `;
 
     grid.appendChild(panel);
@@ -52,13 +52,16 @@
   function handleClick(event) {
     const capture = event.target.closest("#capturePhoto");
     if (capture) {
-      setTimeout(() => createScanFromSource("Camera Scan"), 250);
+      setTimeout(() => {
+        const image = imageFromCameraBox();
+        if (image) runVisionScan(image.data, image.mimeType, "Camera AI Scan");
+      }, 350);
       return;
     }
 
     const connect = event.target.closest("#connectDevice");
     if (connect) {
-      setTimeout(() => createScanFromSource("DeSkin Assisted Detector"), 250);
+      setTimeout(() => renderNoImageDetector(), 250);
       return;
     }
 
@@ -71,43 +74,162 @@
   }
 
   function handleChange(event) {
-    if (event.target?.id === "photoUpload") {
-      setTimeout(() => createScanFromSource("Photo Upload Scan"), 250);
+    if (event.target?.id !== "photoUpload") return;
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      lastImageData = dataUrl;
+      lastMimeType = file.type || "image/jpeg";
+      setTimeout(() => runVisionScan(dataUrl, lastMimeType, "Photo Upload AI Scan"), 250);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function imageFromCameraBox() {
+    const img = $("#cameraBox img");
+    if (img?.src?.startsWith("data:image")) {
+      lastImageData = img.src;
+      lastMimeType = img.src.slice(5, img.src.indexOf(";")) || "image/jpeg";
+      return { data: lastImageData, mimeType: lastMimeType };
+    }
+
+    const video = $("#videoPreview");
+    if (video) {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 720;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext("2d");
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.78);
+      lastImageData = dataUrl;
+      lastMimeType = "image/jpeg";
+      return { data: dataUrl, mimeType: "image/jpeg" };
+    }
+
+    if (lastImageData) return { data: lastImageData, mimeType: lastMimeType };
+    return null;
+  }
+
+  async function runVisionScan(dataUrl, mimeType, source) {
+    if ($("#pageTitle")?.textContent?.trim() !== "SKINAnalyzer") return;
+
+    const body = $("#scanResultBody");
+    const save = $("#saveRealScan");
+    if (body) {
+      body.innerHTML = `
+        <div class="panel">
+          <strong>DeSkin AI sedang membaca gambar...</strong>
+          <p class="muted">Mohon tunggu. Foto dikirim ke Gemini melalui endpoint aman /api/ai, bukan langsung dari client ke Google.</p>
+        </div>
+      `;
+    }
+    if (save) save.disabled = true;
+
+    try {
+      const response = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feature: "SKINAnalyzerVision",
+          message: "Analisis gambar ini untuk fitur DeSkin AI vision scan. Tolak jika bukan wajah atau area kulit manusia yang jelas.",
+          imageData: dataUrl,
+          mimeType
+        })
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok || !result.scan) {
+        throw new Error(result.error || "AI scan gagal membaca gambar.");
+      }
+
+      const scan = result.scan;
+      if (!scan.isSkinImage || scan.confidence < 45) {
+        pendingScan = null;
+        renderRejectedScan(scan);
+        return;
+      }
+
+      pendingScan = {
+        id: uid(),
+        date: new Date().toISOString(),
+        moisture: scan.moisture,
+        sebum: scan.sebum,
+        texture: scan.texture,
+        acne: scan.acne,
+        sensitivity: scan.sensitivity,
+        source,
+        notes: `${source}: ${scan.summary} ${scan.safetyNote}`,
+        ai: {
+          model: result.model || "gemini-2.5-flash",
+          confidence: scan.confidence,
+          skinType: scan.skinType,
+          concerns: scan.concerns,
+          summary: scan.summary,
+          safetyNote: scan.safetyNote
+        }
+      };
+
+      renderPendingScan(scan);
+    } catch (error) {
+      pendingScan = null;
+      if (body) {
+        body.innerHTML = `
+          <div class="panel">
+            <strong>AI scan gagal.</strong>
+            <p class="muted">${escapeHtml(error.message || "Coba ulangi dengan foto wajah yang lebih jelas.")}</p>
+          </div>
+        `;
+      }
+      if (save) save.disabled = true;
     }
   }
 
-  function createScanFromSource(source) {
-    if ($("#pageTitle")?.textContent?.trim() !== "SKINAnalyzer") return;
+  function renderRejectedScan(scan) {
+    const body = $("#scanResultBody");
+    const button = $("#saveRealScan");
+    if (!body || !button) return;
 
-    const state = readState();
-    const latest = getLatest(state);
-    const seed = Date.now() % 17;
-
-    pendingScan = {
-      id: uid(),
-      date: new Date().toISOString(),
-      moisture: clamp(number(latest.moisture, 55) + drift(seed, -9, 8), 25, 92),
-      sebum: clamp(number(latest.sebum, 62) + drift(seed + 2, -8, 11), 18, 95),
-      texture: clamp(number(latest.texture, 60) + drift(seed + 4, -7, 9), 22, 94),
-      acne: clamp(number(latest.acne, 48) + drift(seed + 6, -9, 13), 8, 92),
-      sensitivity: clamp(number(latest.sensitivity, 32) + drift(seed + 8, -7, 8), 5, 88),
-      source,
-      notes: `${source}: hasil scan otomatis dari kamera/foto/detector. Data ini dipakai untuk rekomendasi AI aplikasi.`
-    };
-
-    renderPendingScan();
+    body.innerHTML = `
+      <div class="panel">
+        <div class="between"><strong>Gambar tidak valid untuk scan kulit</strong><span class="pill warn">Ditolak</span></div>
+        <p class="muted">${escapeHtml(scan.summary || "Gambar bukan wajah/kulit yang jelas.")}</p>
+        <p class="muted">Confidence: ${escapeHtml(scan.confidence)}%</p>
+      </div>
+    `;
+    button.disabled = true;
   }
 
-  function renderPendingScan() {
+  function renderNoImageDetector() {
+    const body = $("#scanResultBody");
+    const button = $("#saveRealScan");
+    pendingScan = null;
+    if (body) {
+      body.innerHTML = `
+        <div class="panel">
+          <strong>Detector simulasi tidak memakai kamera AI.</strong>
+          <p class="muted">Untuk scan akurat berbasis AI, gunakan Buka kamera + Capture atau Upload foto wajah. Detector simulasi hanya menandai perangkat terhubung.</p>
+        </div>
+      `;
+    }
+    if (button) button.disabled = true;
+  }
+
+  function renderPendingScan(scan) {
     const body = $("#scanResultBody");
     const button = $("#saveRealScan");
     if (!body || !button || !pendingScan) return;
 
-    const insight = deriveScan(pendingScan);
+    const insight = deriveScan(pendingScan, scan);
     body.innerHTML = `
       <div class="panel">
-        <div class="between"><strong>${escapeHtml(pendingScan.source)}</strong><span class="pill success">Siap disimpan</span></div>
-        <p class="muted">${escapeHtml(insight.summary)}</p>
+        <div class="between"><strong>${escapeHtml(pendingScan.source)}</strong><span class="pill success">AI valid</span></div>
+        <p class="muted">${escapeHtml(scan.summary || insight.summary)}</p>
+        <p class="muted">Confidence AI: ${escapeHtml(scan.confidence)}%</p>
         <div class="row">${insight.concerns.map(item => `<span class="tag">${escapeHtml(labelConcern(item))}</span>`).join("") || `<span class="tag">Stabil</span>`}</div>
       </div>
       ${meter("Kelembapan", pendingScan.moisture)}
@@ -115,6 +237,7 @@
       ${meter("Tekstur", pendingScan.texture)}
       ${meter("Acne risk", pendingScan.acne)}
       ${meter("Sensitivitas", pendingScan.sensitivity)}
+      <p class="muted">${escapeHtml(scan.safetyNote || "Hasil adalah estimasi visual edukatif, bukan diagnosis medis.")}</p>
     `;
     button.disabled = false;
   }
@@ -127,7 +250,7 @@
     state.profile = state.profile || {};
     state.analyses.push(pendingScan);
 
-    const insight = deriveScan(pendingScan);
+    const insight = deriveScan(pendingScan, pendingScan.ai);
     state.scanInsight = insight;
     state.profile.concerns = unique([...(insight.concerns || []), ...((state.profile && state.profile.concerns) || [])]).slice(0, 7);
     state.profile.skinType = insight.skinType || state.profile.skinType || "normal";
@@ -147,33 +270,33 @@
     }
   }
 
-  function getLatest(state) {
-    const list = Array.isArray(state.analyses) ? state.analyses : [];
-    return list[list.length - 1] || { moisture: 55, sebum: 62, texture: 60, acne: 48, sensitivity: 32 };
-  }
+  function deriveScan(a, ai = {}) {
+    const concerns = Array.isArray(ai.concerns) && ai.concerns.length ? ai.concerns.slice() : [];
+    if (!concerns.length) {
+      if (a.acne >= 50) concerns.push("acne");
+      if (a.sebum >= 62) concerns.push("oil");
+      if (a.moisture <= 48) concerns.push("dry");
+      if (a.texture <= 58) concerns.push("texture");
+      if (a.sebum >= 62 && a.texture <= 64) concerns.push("pores");
+      if (a.sensitivity >= 42) concerns.push("redness");
+    }
 
-  function deriveScan(a) {
-    const concerns = [];
-    if (a.acne >= 50) concerns.push("acne");
-    if (a.sebum >= 62) concerns.push("oil");
-    if (a.moisture <= 48) concerns.push("dry");
-    if (a.texture <= 58) concerns.push("texture");
-    if (a.sebum >= 62 && a.texture <= 64) concerns.push("pores");
-    if (a.sensitivity >= 42) concerns.push("redness");
-
-    let skinType = "normal";
-    if (a.sensitivity >= 55) skinType = "sensitive";
-    else if (a.sebum >= 65 && a.moisture <= 52) skinType = "combination";
-    else if (a.sebum >= 60) skinType = "oily";
-    else if (a.moisture <= 45) skinType = "dry";
+    let skinType = ai.skinType && ai.skinType !== "unknown" ? ai.skinType : "normal";
+    if (!ai.skinType || ai.skinType === "unknown") {
+      if (a.sensitivity >= 55) skinType = "sensitive";
+      else if (a.sebum >= 65 && a.moisture <= 52) skinType = "combination";
+      else if (a.sebum >= 60) skinType = "oily";
+      else if (a.moisture <= 45) skinType = "dry";
+    }
 
     return {
       concerns: unique(concerns),
       skinType,
-      summary: concerns.length
-        ? `Scan terakhir menunjukkan fokus utama: ${concerns.map(labelConcern).join(", ")}.`
-        : "Scan terakhir terlihat cukup stabil.",
-      updatedAt: new Date().toISOString()
+      summary: ai.summary || (concerns.length
+        ? `Scan AI terakhir menunjukkan fokus utama: ${concerns.map(labelConcern).join(", ")}.`
+        : "Scan AI terakhir terlihat cukup stabil."),
+      updatedAt: new Date().toISOString(),
+      confidence: ai.confidence || null
     };
   }
 
@@ -195,20 +318,6 @@
       pores: "Pori-pori",
       redness: "Sensitif/kemerahan"
     })[value] || value;
-  }
-
-  function drift(seed, min, max) {
-    const span = max - min + 1;
-    return min + (Math.abs(seed * 37 + 11) % span);
-  }
-
-  function number(value, fallback) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
-  }
-
-  function clamp(value, min, max) {
-    return Math.min(max, Math.max(min, Math.round(Number(value))));
   }
 
   function unique(items) {
