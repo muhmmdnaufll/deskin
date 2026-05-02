@@ -4,6 +4,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   let lastPlaces = [];
   let userPosition = null;
+  let activeSource = "Foursquare / OSM";
 
   boot();
 
@@ -12,6 +13,7 @@
     new MutationObserver(patchMapPage).observe(document.body, { childList: true, subtree: true });
     document.addEventListener("click", handleClick, true);
     document.addEventListener("input", handleInput, true);
+    document.addEventListener("change", handleInput, true);
   }
 
   function patchMapPage() {
@@ -34,9 +36,9 @@
         <div>
           <p class="eyebrow">Real nearby search</p>
           <h2>Klinik kulit & kecantikan terdekat</h2>
-          <p class="muted">Menggunakan lokasi perangkat dan data OpenStreetMap. Tidak perlu API key.</p>
+          <p class="muted">Menggunakan Foursquare Places API sebagai sumber utama. Jika API key belum terbaca atau limit, otomatis fallback ke OpenStreetMap.</p>
         </div>
-        <span class="pill success">OSM</span>
+        <span id="skinMapSourceBadge" class="pill success">Foursquare</span>
       </div>
       <div class="row">
         <select id="skinMapRadius" aria-label="Radius pencarian">
@@ -86,8 +88,7 @@
     if (route) {
       const lat = route.dataset.lat;
       const lon = route.dataset.lon;
-      const name = route.dataset.name || "Tujuan";
-      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat + "," + lon)}&destination_place_id=&travelmode=driving`, "_blank", "noopener,noreferrer");
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat + "," + lon)}&travelmode=driving`, "_blank", "noopener,noreferrer");
       return;
     }
 
@@ -103,10 +104,12 @@
     if (["skinMapSearch", "skinMapFilter"].includes(event.target?.id)) {
       renderPlaces();
     }
+    if (event.target?.id === "skinMapRadius" && userPosition) {
+      searchNearby(userPosition.lat, userPosition.lon);
+    }
   }
 
   function requestLocationAndSearch() {
-    const status = $("#skinMapStatus");
     if (!navigator.geolocation) {
       setStatus("Geolocation tidak tersedia", "Browser ini belum mendukung akses lokasi.");
       return;
@@ -129,24 +132,28 @@
 
   async function searchNearby(lat, lon) {
     const radius = Number($("#skinMapRadius")?.value || 6000);
-    setStatus("Mencari lokasi terdekat...", `Radius ${Math.round(radius / 1000)} km dari posisi kamu.`);
+    setSourceBadge("Foursquare", true);
+    setStatus("Mencari lokasi terdekat...", `Mengutamakan Foursquare Places API. Radius ${Math.round(radius / 1000)} km dari posisi kamu.`);
 
     try {
-      const response = await fetch(`/api/places?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}`);
+      const response = await fetch(`/api/places?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}&provider=foursquare&v=fsq106`);
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) throw new Error(data.error || "Gagal mengambil data lokasi.");
 
+      activeSource = data.source || "Places API";
+      setSourceBadge(activeSource, !data.fallback);
       lastPlaces = Array.isArray(data.places) ? data.places : [];
       setStatus(
         lastPlaces.length ? `${lastPlaces.length} lokasi ditemukan` : "Belum ada lokasi ditemukan",
         lastPlaces.length
-          ? "Hasil diurutkan berdasarkan relevansi klinik kulit/kecantikan dan jarak."
-          : "Coba radius lebih besar atau gunakan Google Maps langsung."
+          ? `Sumber aktif: ${activeSource}. Hasil diurutkan berdasarkan relevansi klinik kulit/kecantikan dan jarak.`
+          : `Sumber aktif: ${activeSource}. Coba radius lebih besar.`
       );
       renderPlaces();
       renderMapPins();
     } catch (error) {
       lastPlaces = [];
+      setSourceBadge("Foursquare gagal", false);
       setStatus("Pencarian gagal", error.message || "Layanan peta sedang sibuk. Coba lagi nanti.");
       renderPlaces();
     }
@@ -160,21 +167,21 @@
     const filter = $("#skinMapFilter")?.value || "all";
 
     const places = lastPlaces.filter((place) => {
-      const text = `${place.name} ${place.type} ${place.address}`.toLowerCase();
+      const text = `${place.name} ${place.type} ${place.address} ${(place.rawTypes || []).join(" ")}`.toLowerCase();
       const matchQuery = !query || text.includes(query);
       const type = String(place.type || "").toLowerCase();
       const matchFilter =
         filter === "all" ||
-        (filter === "skin" && /kulit|skin|dermat/.test(text)) ||
-        (filter === "beauty" && /kecantikan|beauty|aesthetic|estetik/.test(text)) ||
-        (filter === "clinic" && /klinik|clinic|dokter/.test(type + " " + text)) ||
+        (filter === "skin" && /kulit|skin|dermat|sp\.kk|spkk/.test(text)) ||
+        (filter === "beauty" && /kecantikan|beauty|aesthetic|estetik|facial|skincare/.test(text)) ||
+        (filter === "clinic" && /klinik|clinic|dokter|doctor/.test(type + " " + text)) ||
         (filter === "pharmacy" && /apotek|pharmacy/.test(type + " " + text));
       return matchQuery && matchFilter;
     });
 
     list.innerHTML = places.length
       ? places.map(placeCard).join("")
-      : `<div class="panel"><strong>Tidak ada hasil sesuai filter.</strong><p class="muted">Coba ganti filter, radius, atau kata pencarian.</p></div>`;
+      : `<div class="panel"><strong>Tidak ada hasil sesuai filter.</strong><p class="muted">Coba ganti filter, radius, atau kata pencarian. Sumber aktif: ${escapeHtml(activeSource)}.</p></div>`;
   }
 
   function renderMapPins() {
@@ -191,10 +198,7 @@
     const scale = 9000;
     const x = 50 + ((pLon - lon) * Math.cos((lat * Math.PI) / 180) * 111000 / scale) * 42;
     const y = 55 - (((pLat - lat) * 111000) / scale) * 42;
-    return {
-      x: Math.max(8, Math.min(92, x)),
-      y: Math.max(8, Math.min(92, y)),
-    };
+    return { x: Math.max(8, Math.min(92, x)), y: Math.max(8, Math.min(92, y)) };
   }
 
   function placeCard(place) {
@@ -202,6 +206,8 @@
     const address = place.address ? `<p class="muted">${escapeHtml(place.address)}</p>` : "";
     const open = place.openingHours ? `<p class="muted">Jam: ${escapeHtml(place.openingHours)}</p>` : "";
     const phone = place.phone ? `<p class="muted">Telp: ${escapeHtml(place.phone)}</p>` : "";
+    const rating = place.rating ? `<p class="muted">Rating: ${escapeHtml(place.rating)}${place.userRatingCount ? ` · ${escapeHtml(place.userRatingCount)} ulasan` : ""}</p>` : "";
+    const source = place.source ? `<span class="tag">${escapeHtml(place.source)}</span>` : "";
     const website = place.website ? `<a class="ghost-btn" href="${escapeAttr(place.website)}" target="_blank" rel="noopener noreferrer">Website</a>` : "";
 
     return `
@@ -214,15 +220,24 @@
           ${relevance}
         </div>
         ${address}
+        ${rating}
         ${open}
         ${phone}
         <div class="row">
-          <button class="primary-btn" type="button" data-open-route="1" data-lat="${escapeAttr(place.lat)}" data-lon="${escapeAttr(place.lon)}" data-name="${escapeAttr(place.name)}">Rute</button>
+          <button class="primary-btn" type="button" data-open-route="1" data-lat="${escapeAttr(place.lat)}" data-lon="${escapeAttr(place.lon)}">Rute</button>
           <button class="secondary-btn" type="button" data-open-details="1" data-lat="${escapeAttr(place.lat)}" data-lon="${escapeAttr(place.lon)}">Buka Maps</button>
           ${website}
+          ${source}
         </div>
       </article>
     `;
+  }
+
+  function setSourceBadge(source, isPrimary) {
+    const badge = $("#skinMapSourceBadge");
+    if (!badge) return;
+    badge.className = isPrimary ? "pill success" : "pill warn";
+    badge.textContent = source.includes("Foursquare") ? "Foursquare" : source.includes("OpenStreetMap") ? "OSM fallback" : source;
   }
 
   function setStatus(title, description) {
@@ -232,13 +247,7 @@
   }
 
   function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>'"]/g, (char) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      "'": "&#39;",
-      '"': "&quot;"
-    }[char]));
+    return String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
   }
 
   function escapeAttr(value) {
