@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "1.0.2";
+  const APP_VERSION = "1.0.3";
   const STORE_KEY = "deskin_state_v1";
   const HW_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
   const HW_CHAR_UUID = "0000fff1-0000-1000-8000-00805f9b34fb";
@@ -1363,3 +1363,150 @@ async function askDeSkinAI(message, feature = "general") {
 
   return data.answer;
 }
+(() => {
+  if (window.__deskinAiChatPatched) return;
+  window.__deskinAiChatPatched = true;
+
+  async function askDeSkinAI(message, feature = "SKINTalk") {
+    const response = await fetch("/api/ai", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message,
+        feature
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "AI gagal merespons.");
+    }
+
+    return data.answer;
+  }
+
+  function getTimeNow() {
+    if (typeof timeNow === "function") return timeNow();
+
+    return new Date().toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function saveChatMessage(message) {
+    if (typeof state !== "undefined" && Array.isArray(state.messages)) {
+      state.messages.push(message);
+    }
+
+    if (typeof saveState === "function") {
+      saveState();
+    }
+  }
+
+  function addChatMessage(message) {
+    const chatBox = document.querySelector("#chatBox");
+    if (!chatBox) return null;
+
+    if (typeof messageHtml === "function") {
+      chatBox.insertAdjacentHTML("beforeend", messageHtml(message));
+    } else {
+      const isMe = message.from === "me";
+      chatBox.insertAdjacentHTML(
+        "beforeend",
+        `
+          <div class="message ${isMe ? "me" : ""}">
+            <p>${escapeHtml(message.text)}</p>
+            <small>${escapeHtml(message.at)}</small>
+          </div>
+        `
+      );
+    }
+
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return chatBox.lastElementChild;
+  }
+
+  document.addEventListener(
+    "submit",
+    async (event) => {
+      const form = event.target;
+
+      if (!form || form.id !== "chatForm") return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const input = form.querySelector('input[name="text"]');
+      const button = form.querySelector('button[type="submit"]');
+
+      if (!input || !button) return;
+
+      const text = input.value.trim();
+      if (!text) return;
+
+      const userMessage = {
+        from: "me",
+        text,
+        at: getTimeNow()
+      };
+
+      saveChatMessage(userMessage);
+      addChatMessage(userMessage);
+
+      input.value = "";
+      button.disabled = true;
+      button.textContent = "Menjawab...";
+
+      const loadingMessage = {
+        from: "consultant",
+        text: "DeSkin AI sedang menganalisis pertanyaan kamu...",
+        at: getTimeNow()
+      };
+
+      const loadingElement = addChatMessage(loadingMessage);
+
+      try {
+        const aiAnswer = await askDeSkinAI(text, "SKINTalk");
+
+        if (loadingElement) loadingElement.remove();
+
+        const aiMessage = {
+          from: "consultant",
+          text: aiAnswer,
+          at: getTimeNow()
+        };
+
+        saveChatMessage(aiMessage);
+        addChatMessage(aiMessage);
+      } catch (error) {
+        if (loadingElement) loadingElement.remove();
+
+        const errorMessage = {
+          from: "consultant",
+          text:
+            "Maaf, DeSkin AI sedang tidak bisa diakses. Pastikan GEMINI_API_KEY sudah benar di Vercel dan file API berada di api/ai.js.",
+          at: getTimeNow()
+        };
+
+        addChatMessage(errorMessage);
+      } finally {
+        button.disabled = false;
+        button.textContent = "Kirim";
+      }
+    },
+    true
+  );
+})();
