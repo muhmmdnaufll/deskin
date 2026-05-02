@@ -8,9 +8,9 @@
   <title>DeSkin - Digital Skin Assistant</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=1.0.6-rescue" />
+  <link rel="stylesheet" href="styles.css?v=1.0.6-scan" />
   <style>
-    .chat-box{overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}.message{height:auto!important;max-height:none!important;overflow:visible!important;white-space:normal!important}.message p,.ai-output{margin:0;white-space:normal;overflow:visible;overflow-wrap:anywhere;word-break:normal;line-height:1.58}.message small{display:block;margin-top:12px}.ai-output{display:grid;gap:12px;color:var(--text);max-height:none!important}.deskin-ai-btn{white-space:nowrap}#videoPreview,.mirror-preview{transform:scaleX(-1)}.camera-box img{object-position:center}.modal-backdrop{align-items:stretch!important;padding:14px!important}.modal{width:min(860px,100%)!important;max-height:calc(100vh - 28px)!important;overflow:auto!important;-webkit-overflow-scrolling:touch!important}.modal-body{padding:24px!important;max-height:none!important;overflow:visible!important}.copy-ai-answer{margin-top:18px;width:100%}#deskinCopyright{margin-left:var(--sidebar);padding:10px 16px 26px;text-align:center;color:var(--muted)}@media(max-width:860px){#deskinCopyright{margin-left:0}}@media(max-width:520px){.message{max-width:92%!important}.message p,.ai-output{font-size:16px;line-height:1.62}.row .deskin-ai-btn,.hero-actions .deskin-ai-btn{width:100%}.topbar h1{max-width:58vw;overflow-wrap:anywhere}.modal-backdrop{padding:10px!important;place-items:stretch!important}.modal{max-height:calc(100vh - 20px)!important;border-radius:22px!important}.modal-body{padding:20px!important}}
+    .chat-box{overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}.message{height:auto!important;max-height:none!important;overflow:visible!important;white-space:normal!important}.message p,.ai-output{margin:0;white-space:normal;overflow:visible;overflow-wrap:anywhere;word-break:normal;line-height:1.58}.message small{display:block;margin-top:12px}.ai-output{display:grid;gap:12px;color:var(--text);max-height:none!important}.deskin-ai-btn{white-space:nowrap}#videoPreview,.mirror-preview{transform:scaleX(-1)}.camera-box img{object-position:center}.modal-backdrop{align-items:stretch!important;padding:14px!important}.modal{width:min(860px,100%)!important;max-height:calc(100vh - 28px)!important;overflow:auto!important;-webkit-overflow-scrolling:touch!important}.modal-body{padding:24px!important;max-height:none!important;overflow:visible!important}.copy-ai-answer{margin-top:18px;width:100%}#deskinCopyright{margin-left:var(--sidebar);padding:10px 16px 26px;text-align:center;color:var(--muted)}#saveRealScan:disabled{opacity:.55;cursor:not-allowed}@media(max-width:860px){#deskinCopyright{margin-left:0}}@media(max-width:520px){.message{max-width:92%!important}.message p,.ai-output{font-size:16px;line-height:1.62}.row .deskin-ai-btn,.hero-actions .deskin-ai-btn{width:100%}.topbar h1{max-width:58vw;overflow-wrap:anywhere}.modal-backdrop{padding:10px!important;place-items:stretch!important}.modal{max-height:calc(100vh - 20px)!important;border-radius:22px!important}.modal-body{padding:20px!important}}
   </style>
 </head>
 <body>
@@ -63,6 +63,7 @@
       app.innerHTML = '<section class="container card stack"><h2>Aplikasi gagal dimuat</h2><p class="muted">Silakan refresh halaman. Jika masih kosong, hapus cache/site data browser lalu buka ulang.</p><p class="muted">Detail: ' + String(event.message || "unknown error") + '</p></section>';
     });
   </script>
-  <script src="app-stable-106.js?v=1.0.6-rescue" defer></script>
+  <script src="app-stable-106.js?v=1.0.6-scan" defer></script>
+  <script src="scan-save-106.js?v=1.0.6-scan" defer></script>
 </body>
 </html>
