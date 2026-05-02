@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "1.0.0";
+  const APP_VERSION = "1.0.1";
   const STORE_KEY = "deskin_state_v1";
   const HW_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
   const HW_CHAR_UUID = "0000fff1-0000-1000-8000-00805f9b34fb";
@@ -218,7 +218,7 @@
       <section class="container hero">
         <div>
           <p class="eyebrow">DeSkin Inc.</p>
-          <h2>Digital skin assistant yang ringan dan siap dipakai.</h2>
+          <h2>Software digital skin assistant.</h2>
           <p>Prototype ini merangkum fitur-fitur demo DeSkin: SKINDaily, SKINMap, SKINMarket, SKINEdu, SKINAnalyzer, SKINAnalysis, dan SKINTalk. Semua berjalan di browser dengan localStorage, camera API, geolocation API, dan Web Bluetooth fallback.</p>
           <div class="hero-actions">
             <a class="primary-btn" href="#/auth">Mulai sekarang</a>
