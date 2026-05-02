@@ -1,10 +1,11 @@
-const CACHE_NAME = "deskin-cache-Versi 1.0.4.";
+const CACHE_NAME = "deskin-cache-v1-0-6";
 
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
-  "/app.js",
+  "/app-fixed.js",
+  "/enhance-v106.js",
   "/manifest.webmanifest",
   "/404.html"
 ];
@@ -39,6 +40,8 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
 
   if (request.method !== "GET") return;
+
+  if (request.url.includes("/api/")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(
