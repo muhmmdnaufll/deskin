@@ -47,12 +47,12 @@
     if (!title || $("[data-deskin-ai-enhanced='true']")) return;
 
     const map = {
-      Dashboard: ["Insight AI", "Dashboard", "Buat insight singkat hari ini dan 3 prioritas tindakan."],
+      Dashboard: ["Insight AI", "Dashboard", "Buat insight hari ini dan 3 prioritas tindakan berdasarkan data pengguna."],
       SKINDaily: ["Rutinitas AI", "SKINDaily", "Susun rutinitas pagi dan malam yang sederhana, ringan, dan aman untuk 2 minggu."],
       SKINMap: ["Saran AI", "SKINMap", "Beri saran kapan perlu ke klinik, apotek, atau cukup perawatan rumah berdasarkan data kulit dan lokasi demo."],
       SKINMarket: ["Rekomendasi AI", "SKINMarket", "Pilih 3 produk prioritas dari daftar produk demo dan jelaskan urutan pemakaiannya."],
-      SKINEdu: ["Tanya AI", "SKINEdu", "Buat materi edukasi singkat yang paling relevan dengan profil kulit pengguna."],
-      SKINAnalyzer: ["Tips scan AI", "SKINAnalyzer", "Beri instruksi scan wajah yang benar, kondisi cahaya, dan hal yang harus dihindari agar hasil stabil."],
+      SKINEdu: ["Tanya AI", "SKINEdu", "Buat materi edukasi yang paling relevan dengan profil kulit pengguna."],
+      SKINAnalyzer: ["Tips scan AI", "SKINAnalyzer", "Beri instruksi scan wajah yang benar, kondisi cahaya, posisi wajah, hal yang harus dihindari, dan cara menjaga hasil tetap stabil."],
       SKINAnalysis: ["Analisis AI", "SKINAnalysis", "Jelaskan hasil parameter, risiko utama, dan langkah perawatan 14 hari. Jangan diagnosis medis."],
       Profil: ["Evaluasi profil AI", "Profil", "Evaluasi kelengkapan profil dan beri saran data apa yang perlu ditambahkan agar rekomendasi lebih akurat."]
     };
@@ -93,13 +93,13 @@
     const products = $$(".product-card h3").map(el => el.textContent.trim()).filter(Boolean).slice(0, 8);
     const page = $("#pageTitle")?.textContent?.trim() || "DeSkin";
     return [
-      "Kamu adalah DeSkin AI. Jawab dalam bahasa Indonesia, jelas, praktis, dan tidak mengklaim diagnosis medis.",
+      "Kamu adalah DeSkin AI. Jawab dalam bahasa Indonesia, jelas, praktis, lengkap, dan tidak mengklaim diagnosis medis.",
       `Halaman aktif: ${page}.`,
       `Profil: nama ${state.profile?.name || "Pengguna"}, tipe kulit ${state.profile?.skinType || "unknown"}, concern ${(state.profile?.concerns || []).join(", ") || "belum diisi"}.`,
       `Analisis terakhir: moisture ${latest.moisture}, sebum ${latest.sebum}, texture ${latest.texture}, acne ${latest.acne}, sensitivity ${latest.sensitivity}, catatan ${latest.notes || "-"}.`,
       products.length ? `Produk terlihat: ${products.join(", ")}.` : "",
       instruction,
-      "Berikan jawaban lengkap tetapi tetap ringkas. Gunakan format bernomor bila cocok."
+      "Jawab sampai selesai. Jangan berhenti di tengah kalimat. Gunakan format bernomor, maksimal 8 poin utama, tetapi tiap poin boleh lengkap."
     ].filter(Boolean).join("\n");
   }
 
@@ -121,7 +121,20 @@
     try {
       const answer = await askDeSkinAI(prompt, feature);
       const body = $(".modal-body");
-      if (body) body.innerHTML = `<h2 id="modalTitle">${escapeHtml(title)}</h2><div class="ai-output">${formatMessage(answer)}</div>`;
+      if (body) {
+        body.innerHTML = `
+          <h2 id="modalTitle">${escapeHtml(title)}</h2>
+          <div class="ai-output">${formatMessage(answer)}</div>
+          <button class="secondary-btn copy-ai-answer" type="button">Salin jawaban lengkap</button>
+        `;
+        const copyButton = $(".copy-ai-answer", body);
+        if (copyButton) {
+          copyButton.addEventListener("click", async () => {
+            await navigator.clipboard?.writeText(answer).catch(() => {});
+            copyButton.textContent = "Jawaban disalin";
+          });
+        }
+      }
     } catch (error) {
       const body = $(".modal-body");
       if (body) body.innerHTML = `<h2 id="modalTitle">${escapeHtml(title)}</h2><p class="muted">AI belum bisa diakses. Pastikan GEMINI_API_KEY benar di Vercel dan endpoint /api/ai aktif.</p><p class="muted">${escapeHtml(error.message || "")}</p>`;
