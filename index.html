@@ -8,7 +8,7 @@
   <title>DeSkin - Digital Skin Assistant</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="main.css?v=1.0.6-final" />
+  <link rel="stylesheet" href="main.css?v=1.1.0" />
 </head>
 <body>
   <noscript>Aktifkan JavaScript untuk menggunakan aplikasi DeSkin.</noscript>
@@ -54,12 +54,22 @@
   </template>
 
   <script>
+    window.DESKIN_VERSION = "1.1.0";
     window.addEventListener("error", function (event) {
       var app = document.getElementById("app");
       if (!app) return;
       app.innerHTML = '<section class="container card stack"><h2>Aplikasi gagal dimuat</h2><p class="muted">Silakan refresh halaman. Jika masih kosong, hapus cache/site data browser lalu buka ulang.</p><p class="muted">Detail: ' + String(event.message || "unknown error") + '</p></section>';
     });
+    window.addEventListener("DOMContentLoaded", function () {
+      var applyVersion = function () {
+        document.querySelectorAll(".footer-note").forEach(function (node) {
+          node.textContent = "Versi 1.1.0. Data pengguna tersimpan lokal di perangkat.";
+        });
+      };
+      applyVersion();
+      new MutationObserver(applyVersion).observe(document.body, { childList: true, subtree: true });
+    });
   </script>
-  <script src="main.js?v=1.0.6-final" defer></script>
+  <script src="main.js?v=1.1.0" defer></script>
 </body>
 </html>
