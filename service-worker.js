@@ -1,4 +1,4 @@
-const CACHE_NAME = "deskin-cache-v8";
+const CACHE_NAME = "deskin-cache-Versi 1.0.0.";
 
 const APP_SHELL = [
   "/",
