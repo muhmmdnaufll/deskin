@@ -8,7 +8,7 @@
   <title>DeSkin - Digital Skin Assistant</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=1.0.6" />
+  <link rel="stylesheet" href="styles.css?v=1.0.6-fix" />
   <style>
     .chat-box{overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}.message{height:auto!important;max-height:none!important;overflow:visible!important;white-space:normal!important}.message p,.ai-output{margin:0;white-space:normal;overflow:visible;overflow-wrap:anywhere;word-break:normal;line-height:1.58}.message small{display:block;margin-top:12px}.ai-output{display:grid;gap:12px;color:var(--text)}.deskin-ai-btn{white-space:nowrap}#videoPreview,.mirror-preview{transform:scaleX(-1)}.camera-box img{object-position:center}@media(max-width:520px){.message{max-width:92%!important}.message p,.ai-output{font-size:16px;line-height:1.62}.row .deskin-ai-btn,.hero-actions .deskin-ai-btn{width:100%}.topbar h1{max-width:58vw;overflow-wrap:anywhere}}
   </style>
@@ -63,10 +63,7 @@
       app.innerHTML = '<section class="container card stack"><h2>Aplikasi gagal dimuat</h2><p class="muted">Silakan refresh halaman. Jika masih kosong, hapus cache/site data browser lalu buka ulang.</p><p class="muted">Detail: ' + String(event.message || "unknown error") + '</p></section>';
     });
   </script>
-  <script src="app-fixed.js?v=1.0.6" defer></script>
-  <script src="enhance-v106.js?v=1.0.6" defer></script>
-  <script>
-    new MutationObserver(function(){document.body.innerHTML=document.body.innerHTML.replaceAll('Versi 1.0.5','Versi 1.0.6');}).observe(document.body,{childList:true,subtree:true});
-  </script>
+  <script src="app-fixed.js?v=1.0.6-fix" defer></script>
+  <script src="enhance-v106.js?v=1.0.6-fix" defer></script>
 </body>
 </html>
