@@ -33,17 +33,17 @@
     panel.className = "card stack";
     panel.innerHTML = `
       <div>
-        <p class="eyebrow">AI vision scan</p>
-        <h2>Hasil scan wajah AI</h2>
-        <p class="muted">Gunakan kamera atau upload foto wajah. DeSkin AI akan menolak gambar yang bukan kulit/wajah jelas, misalnya tembok atau benda.</p>
+        <p class="eyebrow">Local scan</p>
+        <h2>Hasil scan wajah lokal</h2>
+        <p class="muted">Scan berjalan langsung di browser tanpa kirim foto ke API, jadi tidak memakai limit Gemini. Gambar tembok/benda akan ditolak dengan deteksi lokal.</p>
       </div>
       <div id="scanResultBody" class="stack">
         <div class="panel">
-          <strong>Belum ada hasil scan AI.</strong>
-          <p class="muted">Tekan Capture setelah kamera aktif atau upload foto wajah. Hasil baru bisa disimpan setelah AI selesai menganalisis.</p>
+          <strong>Belum ada hasil scan lokal.</strong>
+          <p class="muted">Tekan Capture setelah kamera aktif atau upload foto wajah. Hasil baru bisa disimpan setelah gambar lolos validasi wajah/kulit.</p>
         </div>
       </div>
-      <button id="saveRealScan" class="primary-btn" type="button" disabled>Simpan hasil scan AI</button>
+      <button id="saveRealScan" class="primary-btn" type="button" disabled>Simpan hasil scan lokal</button>
     `;
 
     grid.appendChild(panel);
@@ -54,7 +54,7 @@
     if (capture) {
       setTimeout(() => {
         const image = imageFromCameraBox();
-        if (image) runVisionScan(image.data, image.mimeType, "Camera AI Scan");
+        if (image) runLocalScan(image.data, image.mimeType, "Camera Local Scan");
       }, 350);
       return;
     }
@@ -83,7 +83,7 @@
       const dataUrl = String(reader.result || "");
       lastImageData = dataUrl;
       lastMimeType = file.type || "image/jpeg";
-      setTimeout(() => runVisionScan(dataUrl, lastMimeType, "Photo Upload AI Scan"), 250);
+      setTimeout(() => runLocalScan(dataUrl, lastMimeType, "Photo Upload Local Scan"), 250);
     };
     reader.readAsDataURL(file);
   }
@@ -115,7 +115,7 @@
     return null;
   }
 
-  async function runVisionScan(dataUrl, mimeType, source) {
+  async function runLocalScan(dataUrl, mimeType, source) {
     if ($("#pageTitle")?.textContent?.trim() !== "SKINAnalyzer") return;
 
     const body = $("#scanResultBody");
@@ -123,70 +123,274 @@
     if (body) {
       body.innerHTML = `
         <div class="panel">
-          <strong>DeSkin AI sedang membaca gambar...</strong>
-          <p class="muted">Mohon tunggu. Foto dikirim ke Gemini melalui endpoint aman /api/ai, bukan langsung dari client ke Google.</p>
+          <strong>DeSkin sedang membaca gambar secara lokal...</strong>
+          <p class="muted">Foto tidak dikirim ke server. Analisis memakai deteksi wajah lokal bila tersedia dan fallback pixel analysis.</p>
         </div>
       `;
     }
     if (save) save.disabled = true;
 
     try {
-      const response = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          feature: "SKINAnalyzerVision",
-          message: "Analisis gambar ini untuk fitur DeSkin AI vision scan. Tolak jika bukan wajah atau area kulit manusia yang jelas.",
-          imageData: dataUrl,
-          mimeType
-        })
-      });
-
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.ok || !result.scan) {
-        throw new Error(result.error || "AI scan gagal membaca gambar.");
-      }
-
-      const scan = result.scan;
-      if (!scan.isSkinImage || scan.confidence < 45) {
+      const local = await analyzeImageLocally(dataUrl, mimeType);
+      if (!local.isSkinImage || local.confidence < 45) {
         pendingScan = null;
-        renderRejectedScan(scan);
+        renderRejectedScan(local);
         return;
       }
 
       pendingScan = {
         id: uid(),
         date: new Date().toISOString(),
-        moisture: scan.moisture,
-        sebum: scan.sebum,
-        texture: scan.texture,
-        acne: scan.acne,
-        sensitivity: scan.sensitivity,
+        moisture: local.moisture,
+        sebum: local.sebum,
+        texture: local.texture,
+        acne: local.acne,
+        sensitivity: local.sensitivity,
         source,
-        notes: `${source}: ${scan.summary} ${scan.safetyNote}`,
+        notes: `${source}: ${local.summary} ${local.safetyNote}`,
         ai: {
-          model: result.model || "gemini-2.5-flash",
-          confidence: scan.confidence,
-          skinType: scan.skinType,
-          concerns: scan.concerns,
-          summary: scan.summary,
-          safetyNote: scan.safetyNote
+          model: "local-browser-scan-v1",
+          confidence: local.confidence,
+          skinType: local.skinType,
+          concerns: local.concerns,
+          summary: local.summary,
+          safetyNote: local.safetyNote,
+          method: local.method
         }
       };
 
-      renderPendingScan(scan);
+      renderPendingScan(local);
     } catch (error) {
       pendingScan = null;
       if (body) {
         body.innerHTML = `
           <div class="panel">
-            <strong>AI scan gagal.</strong>
+            <strong>Scan lokal gagal.</strong>
             <p class="muted">${escapeHtml(error.message || "Coba ulangi dengan foto wajah yang lebih jelas.")}</p>
           </div>
         `;
       }
       if (save) save.disabled = true;
     }
+  }
+
+  async function analyzeImageLocally(dataUrl, mimeType) {
+    const image = await loadImage(dataUrl);
+    const canvas = document.createElement("canvas");
+    const size = 192;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const fit = coverFit(image.width, image.height, size, size);
+    ctx.drawImage(image, fit.sx, fit.sy, fit.sw, fit.sh, 0, 0, size, size);
+
+    let detectorBox = null;
+    if ("FaceDetector" in window) {
+      try {
+        const detector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+        const faces = await detector.detect(canvas);
+        if (faces && faces[0]?.boundingBox) detectorBox = faces[0].boundingBox;
+      } catch {
+        detectorBox = null;
+      }
+    }
+
+    const imageData = ctx.getImageData(0, 0, size, size);
+    const pixels = imageData.data;
+    const stats = collectStats(pixels, size, detectorBox);
+    const validation = validateFaceLikeImage(stats, detectorBox);
+
+    if (!validation.ok) {
+      return {
+        isSkinImage: false,
+        confidence: validation.confidence,
+        moisture: 50,
+        sebum: 50,
+        texture: 50,
+        acne: 50,
+        sensitivity: 50,
+        skinType: "unknown",
+        concerns: [],
+        summary: validation.reason,
+        safetyNote: "Hasil scan tidak dibuat karena gambar tidak lolos validasi wajah/kulit lokal.",
+        method: detectorBox ? "native-face-detector" : "local-pixel-validation"
+      };
+    }
+
+    const result = estimateSkinMetrics(stats, detectorBox);
+    return {
+      isSkinImage: true,
+      confidence: validation.confidence,
+      ...result,
+      method: detectorBox ? "native-face-detector + pixel-analysis" : "local-pixel-analysis",
+      safetyNote: "Hasil adalah estimasi visual lokal untuk edukasi, bukan diagnosis medis. Akurasi dipengaruhi cahaya, fokus, dan posisi wajah."
+    };
+  }
+
+  function collectStats(pixels, size, faceBox) {
+    const skin = [];
+    let skinCount = 0;
+    let redCount = 0;
+    let shineCount = 0;
+    let darkCount = 0;
+    let totalBrightness = 0;
+    let totalSaturation = 0;
+    let rSum = 0, gSum = 0, bSum = 0;
+    let rSq = 0, gSq = 0, bSq = 0;
+    let minX = size, minY = size, maxX = 0, maxY = 0;
+    let edgeSum = 0;
+    let edgeN = 0;
+
+    const region = faceBox ? expandBox(faceBox, size, 0.18) : { x: 0, y: 0, w: size, h: size };
+
+    for (let y = 1; y < size - 1; y++) {
+      for (let x = 1; x < size - 1; x++) {
+        if (x < region.x || y < region.y || x > region.x + region.w || y > region.y + region.h) continue;
+        const i = (y * size + x) * 4;
+        const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+        const hsv = rgbToHsv(r, g, b);
+        const ycbcr = rgbToYcbcr(r, g, b);
+        const bright = (r + g + b) / 3;
+        const isSkin = skinLike(r, g, b, hsv, ycbcr);
+        const next = ((y * size + x + 1) * 4);
+        const down = (((y + 1) * size + x) * 4);
+        const grad = Math.abs(r - pixels[next]) + Math.abs(g - pixels[next + 1]) + Math.abs(b - pixels[next + 2]) + Math.abs(r - pixels[down]) + Math.abs(g - pixels[down + 1]) + Math.abs(b - pixels[down + 2]);
+        edgeSum += grad / 6;
+        edgeN++;
+
+        if (!isSkin) continue;
+        skinCount++;
+        skin.push({ r, g, b, h: hsv.h, s: hsv.s, v: hsv.v, bright, grad: grad / 6, x, y });
+        totalBrightness += bright;
+        totalSaturation += hsv.s;
+        rSum += r; gSum += g; bSum += b;
+        rSq += r * r; gSq += g * g; bSq += b * b;
+        if (r > g * 1.09 && r > b * 1.18 && hsv.s > 0.22 && bright > 70) redCount++;
+        if (bright > 188 && hsv.s < 0.34) shineCount++;
+        if (bright < 72) darkCount++;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+
+    const regionArea = Math.max(1, region.w * region.h);
+    const skinRatio = skinCount / regionArea;
+    const bboxW = Math.max(0, maxX - minX + 1);
+    const bboxH = Math.max(0, maxY - minY + 1);
+    const bboxAreaRatio = (bboxW * bboxH) / (size * size);
+    const cx = skinCount ? (minX + bboxW / 2) / size : 0.5;
+    const cy = skinCount ? (minY + bboxH / 2) / size : 0.5;
+    const centerDistance = Math.hypot(cx - 0.5, cy - 0.5);
+    const n = Math.max(1, skinCount);
+    const avgR = rSum / n, avgG = gSum / n, avgB = bSum / n;
+    const std = Math.sqrt((rSq / n - avgR * avgR + gSq / n - avgG * avgG + bSq / n - avgB * avgB) / 3);
+
+    return {
+      size,
+      region,
+      skin,
+      skinCount,
+      skinRatio,
+      bboxW,
+      bboxH,
+      bboxAreaRatio,
+      centerDistance,
+      avgBrightness: totalBrightness / n,
+      avgSaturation: totalSaturation / n,
+      avgR,
+      avgG,
+      avgB,
+      colorStd: Number.isFinite(std) ? std : 0,
+      edgeDensity: edgeN ? edgeSum / edgeN : 0,
+      redRatio: redCount / n,
+      shineRatio: shineCount / n,
+      darkRatio: darkCount / n
+    };
+  }
+
+  function validateFaceLikeImage(stats, faceBox) {
+    if (faceBox) {
+      const area = (faceBox.width * faceBox.height) / (stats.size * stats.size);
+      const confidence = clamp(70 + Math.round(area * 50) + Math.round(stats.skinRatio * 20), 70, 96);
+      return { ok: true, confidence, reason: "Wajah terdeteksi oleh browser." };
+    }
+
+    if (stats.skinRatio < 0.07) {
+      return { ok: false, confidence: 18, reason: "Gambar tidak terlihat seperti wajah/kulit manusia. Arahkan kamera ke wajah dengan pencahayaan cukup." };
+    }
+
+    if (stats.skinRatio > 0.82 && stats.colorStd < 16 && stats.edgeDensity < 7) {
+      return { ok: false, confidence: 24, reason: "Gambar terlalu seragam seperti tembok/benda polos, bukan wajah yang jelas." };
+    }
+
+    if (stats.bboxAreaRatio < 0.10 || stats.bboxAreaRatio > 0.92) {
+      return { ok: false, confidence: 32, reason: "Area kulit tidak membentuk komposisi wajah yang cukup jelas. Posisikan wajah di tengah kamera." };
+    }
+
+    if (stats.centerDistance > 0.34) {
+      return { ok: false, confidence: 35, reason: "Area kulit tidak berada di tengah frame. Posisikan wajah lebih tengah." };
+    }
+
+    if (stats.colorStd < 10 && stats.edgeDensity < 5.5) {
+      return { ok: false, confidence: 30, reason: "Gambar terlalu polos/kurang detail untuk scan wajah. Gunakan foto wajah yang lebih jelas." };
+    }
+
+    const confidence = clamp(
+      42 +
+      Math.round(stats.skinRatio * 35) +
+      Math.round(Math.min(18, stats.colorStd)) +
+      Math.round(Math.min(15, stats.edgeDensity)) -
+      Math.round(stats.centerDistance * 30),
+      45,
+      86
+    );
+    return { ok: true, confidence, reason: "Gambar lolos validasi kulit/wajah lokal." };
+  }
+
+  function estimateSkinMetrics(stats, faceBox) {
+    const textureNoise = clamp(stats.skin.reduce((sum, p) => sum + p.grad, 0) / Math.max(1, stats.skin.length), 0, 60);
+    const uneven = clamp(stats.colorStd * 2.2, 0, 100);
+    const redness = clamp(stats.redRatio * 280, 0, 100);
+    const shine = clamp(stats.shineRatio * 260, 0, 100);
+    const dull = clamp((120 - stats.avgBrightness) * 0.8 + stats.darkRatio * 35, 0, 100);
+
+    const moisture = clamp(68 - dull * 0.45 - textureNoise * 0.18 + (stats.avgBrightness > 145 ? 5 : 0), 18, 92);
+    const sebum = clamp(34 + shine * 0.65 + Math.max(0, stats.avgBrightness - 155) * 0.18, 10, 94);
+    const texture = clamp(82 - textureNoise * 0.85 - uneven * 0.18, 18, 96);
+    const acne = clamp(18 + redness * 0.62 + Math.max(0, uneven - 28) * 0.28 + Math.max(0, textureNoise - 16) * 0.35, 5, 92);
+    const sensitivity = clamp(16 + redness * 0.55 + Math.max(0, uneven - 25) * 0.18, 5, 88);
+
+    const concerns = [];
+    if (acne >= 50) concerns.push("acne");
+    if (sebum >= 62) concerns.push("oil");
+    if (moisture <= 48) concerns.push("dry");
+    if (texture <= 58) concerns.push("texture");
+    if (sebum >= 62 && texture <= 64) concerns.push("pores");
+    if (sensitivity >= 42) concerns.push("redness");
+
+    let skinType = "normal";
+    if (sensitivity >= 55) skinType = "sensitive";
+    else if (sebum >= 65 && moisture <= 52) skinType = "combination";
+    else if (sebum >= 60) skinType = "oily";
+    else if (moisture <= 45) skinType = "dry";
+
+    const labels = concerns.map(labelConcern);
+    const summary = labels.length
+      ? `Scan lokal menunjukkan fokus utama: ${labels.join(", ")}.`
+      : "Scan lokal terlihat cukup stabil. Tetap jaga cleanser, moisturizer, dan sunscreen.";
+
+    return {
+      moisture: Math.round(moisture),
+      sebum: Math.round(sebum),
+      texture: Math.round(texture),
+      acne: Math.round(acne),
+      sensitivity: Math.round(sensitivity),
+      skinType,
+      concerns: unique(concerns),
+      summary
+    };
   }
 
   function renderRejectedScan(scan) {
@@ -198,7 +402,7 @@
       <div class="panel">
         <div class="between"><strong>Gambar tidak valid untuk scan kulit</strong><span class="pill warn">Ditolak</span></div>
         <p class="muted">${escapeHtml(scan.summary || "Gambar bukan wajah/kulit yang jelas.")}</p>
-        <p class="muted">Confidence: ${escapeHtml(scan.confidence)}%</p>
+        <p class="muted">Confidence lokal: ${escapeHtml(scan.confidence)}%</p>
       </div>
     `;
     button.disabled = true;
@@ -211,8 +415,8 @@
     if (body) {
       body.innerHTML = `
         <div class="panel">
-          <strong>Detector simulasi tidak memakai kamera AI.</strong>
-          <p class="muted">Untuk scan akurat berbasis AI, gunakan Buka kamera + Capture atau Upload foto wajah. Detector simulasi hanya menandai perangkat terhubung.</p>
+          <strong>Detector simulasi tidak memakai kamera.</strong>
+          <p class="muted">Untuk scan lokal gratis tanpa limit, gunakan Buka kamera + Capture atau Upload foto wajah.</p>
         </div>
       `;
     }
@@ -227,9 +431,9 @@
     const insight = deriveScan(pendingScan, scan);
     body.innerHTML = `
       <div class="panel">
-        <div class="between"><strong>${escapeHtml(pendingScan.source)}</strong><span class="pill success">AI valid</span></div>
+        <div class="between"><strong>${escapeHtml(pendingScan.source)}</strong><span class="pill success">Valid</span></div>
         <p class="muted">${escapeHtml(scan.summary || insight.summary)}</p>
-        <p class="muted">Confidence AI: ${escapeHtml(scan.confidence)}%</p>
+        <p class="muted">Confidence lokal: ${escapeHtml(scan.confidence)}% · Metode: ${escapeHtml(scan.method || "local")}</p>
         <div class="row">${insight.concerns.map(item => `<span class="tag">${escapeHtml(labelConcern(item))}</span>`).join("") || `<span class="tag">Stabil</span>`}</div>
       </div>
       ${meter("Kelembapan", pendingScan.moisture)}
@@ -237,7 +441,7 @@
       ${meter("Tekstur", pendingScan.texture)}
       ${meter("Acne risk", pendingScan.acne)}
       ${meter("Sensitivitas", pendingScan.sensitivity)}
-      <p class="muted">${escapeHtml(scan.safetyNote || "Hasil adalah estimasi visual edukatif, bukan diagnosis medis.")}</p>
+      <p class="muted">${escapeHtml(scan.safetyNote || "Hasil adalah estimasi visual lokal untuk edukasi, bukan diagnosis medis.")}</p>
     `;
     button.disabled = false;
   }
@@ -260,6 +464,66 @@
     pendingScan = null;
     location.hash = "#/analysis";
     setTimeout(() => location.reload(), 60);
+  }
+
+  function loadImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Gambar tidak dapat dibaca."));
+      img.src = dataUrl;
+    });
+  }
+
+  function coverFit(srcW, srcH, dstW, dstH) {
+    const scale = Math.max(dstW / srcW, dstH / srcH);
+    const sw = dstW / scale;
+    const sh = dstH / scale;
+    return {
+      sx: (srcW - sw) / 2,
+      sy: (srcH - sh) / 2,
+      sw,
+      sh
+    };
+  }
+
+  function expandBox(box, size, pad) {
+    const x = Math.max(0, box.x - box.width * pad);
+    const y = Math.max(0, box.y - box.height * pad);
+    const w = Math.min(size - x, box.width * (1 + pad * 2));
+    const h = Math.min(size - y, box.height * (1 + pad * 2));
+    return { x, y, w, h };
+  }
+
+  function skinLike(r, g, b, hsv, ycbcr) {
+    const rgbRule = r > 50 && g > 35 && b > 20 && r > b && r >= g * 0.82 && Math.max(r, g, b) - Math.min(r, g, b) > 12;
+    const hsvRule = hsv.h >= 0 && hsv.h <= 55 && hsv.s >= 0.12 && hsv.s <= 0.72 && hsv.v >= 0.22;
+    const ycbcrRule = ycbcr.cb >= 77 && ycbcr.cb <= 135 && ycbcr.cr >= 130 && ycbcr.cr <= 180;
+    return (rgbRule && hsvRule) || (ycbcrRule && hsv.v > 0.28);
+  }
+
+  function rgbToHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const d = max - min;
+    let h = 0;
+    if (d !== 0) {
+      if (max === r) h = ((g - b) / d) % 6;
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    const s = max === 0 ? 0 : d / max;
+    return { h, s, v: max };
+  }
+
+  function rgbToYcbcr(r, g, b) {
+    return {
+      y: 0.299 * r + 0.587 * g + 0.114 * b,
+      cb: 128 - 0.168736 * r - 0.331264 * g + 0.5 * b,
+      cr: 128 + 0.5 * r - 0.418688 * g - 0.081312 * b
+    };
   }
 
   function readState() {
@@ -293,8 +557,8 @@
       concerns: unique(concerns),
       skinType,
       summary: ai.summary || (concerns.length
-        ? `Scan AI terakhir menunjukkan fokus utama: ${concerns.map(labelConcern).join(", ")}.`
-        : "Scan AI terakhir terlihat cukup stabil."),
+        ? `Scan lokal terakhir menunjukkan fokus utama: ${concerns.map(labelConcern).join(", ")}.`
+        : "Scan lokal terakhir terlihat cukup stabil."),
       updatedAt: new Date().toISOString(),
       confidence: ai.confidence || null
     };
@@ -318,6 +582,10 @@
       pores: "Pori-pori",
       redness: "Sensitif/kemerahan"
     })[value] || value;
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, Math.round(Number(value))));
   }
 
   function unique(items) {
