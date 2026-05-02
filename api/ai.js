@@ -11,7 +11,7 @@ Aturan penting:
 - Jangan menyuruh pengguna memakai obat keras atau resep dokter.
 - Jika gejala berat, luka, infeksi, nyeri, alergi parah, atau masalah menetap, sarankan konsultasi dokter kulit.
 - Jawab dalam bahasa Indonesia.
-- Gunakan gaya jelas, ramah, praktis, dan tetap lengkap.
+- Gunakan gaya jelas, ramah, praktis, dan lengkap.
 `;
 
 function json(data, status = 200) {
@@ -60,12 +60,12 @@ Konteks fitur: ${feature}
 Pertanyaan atau data pengguna:
 ${message}
 
-Berikan jawaban dengan format rapi:
+Berikan jawaban lengkap dan jangan berhenti di tengah kalimat.
+Gunakan format rapi:
 1. Ringkasan kondisi/kebutuhan
-2. Rekomendasi praktis
+2. Langkah praktis
 3. Catatan keamanan
-
-Jawaban boleh lengkap, tetapi jangan bertele-tele.
+4. Kapan perlu konsultasi
 `;
 
     const response = await fetch(
@@ -87,9 +87,9 @@ Jawaban boleh lengkap, tetapi jangan bertele-tele.
             },
           ],
           generationConfig: {
-            temperature: 0.55,
+            temperature: 0.5,
             topP: 0.9,
-            maxOutputTokens: 1800,
+            maxOutputTokens: 4096,
           },
         }),
       }
