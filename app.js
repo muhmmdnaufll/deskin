@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "1.0.1";
+  const APP_VERSION = "1.0.2";
   const STORE_KEY = "deskin_state_v1";
   const HW_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
   const HW_CHAR_UUID = "0000fff1-0000-1000-8000-00805f9b34fb";
@@ -1343,3 +1343,23 @@
     return String(value ?? "").replace(/[&<>'"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[ch]));
   }
 })();
+async function askDeSkinAI(message, feature = "general") {
+  const response = await fetch("/api/ai", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message,
+      feature,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.error || "AI gagal merespons.");
+  }
+
+  return data.answer;
+}
