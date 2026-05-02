@@ -34,7 +34,7 @@
       <div>
         <p class="eyebrow">Strict local scan</p>
         <h2>Hasil scan wajah lokal</h2>
-        <p class="muted">Standar validasi diperketat: gambar harus terlihat seperti wajah, berada di tengah, cukup tajam, tidak terlalu gelap/terang, dan tidak polos seperti tembok.</p>
+        <p class="muted"> Wajah harus terlihat jelas, berada di tengah, cukup tajam, tidak terlalu gelap/terang.</p>
       </div>
       <div id="scanResultBody" class="stack">
         <div class="panel">
