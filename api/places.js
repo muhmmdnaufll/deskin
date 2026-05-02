@@ -3,10 +3,23 @@ function json(data, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=180, s-maxage=300",
+      "Cache-Control": "public, max-age=120, s-maxage=240",
     },
   });
 }
+
+const MAX_RADIUS = 50000;
+const DEFAULT_RADIUS = 6000;
+const SEARCH_QUERIES = [
+  "klinik kulit",
+  "dokter kulit",
+  "klinik kecantikan",
+  "aesthetic clinic",
+  "skin clinic",
+  "beauty clinic",
+  "skincare clinic",
+  "dermatology clinic",
+];
 
 function distanceKm(lat1, lon1, lat2, lon2) {
   const r = 6371;
@@ -18,6 +31,11 @@ function distanceKm(lat1, lon1, lat2, lon2) {
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) ** 2;
   return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function radiusSteps(requestedRadius) {
+  const base = Math.min(MAX_RADIUS, Math.max(1000, Number(requestedRadius) || DEFAULT_RADIUS));
+  return Array.from(new Set([base, 10000, 25000, MAX_RADIUS].filter((value) => value >= base))).sort((a, b) => a - b);
 }
 
 function classifyByText(text = "") {
@@ -35,17 +53,17 @@ function hasSkinOrBeautySignal(text = "") {
 }
 
 function placeScore(place, userLat, userLon) {
-  const text = `${place.name} ${place.type} ${place.address}`.toLowerCase();
+  const text = `${place.name} ${place.type} ${place.address} ${(place.rawTypes || []).join(" ")}`.toLowerCase();
   let score = 0;
-  if (/dermat|dokter kulit|sp\.kk|spkk/.test(text)) score += 60;
-  if (/skin|kulit/.test(text)) score += 42;
-  if (/aesthetic|estetik|kecantikan|beauty|facial|laser|skincare/.test(text)) score += 32;
-  if (/clinic|klinik/.test(text)) score += 15;
-  if (/doctor|dokter/.test(text)) score += 10;
+  if (/dermat|dokter kulit|sp\.kk|spkk/.test(text)) score += 70;
+  if (/skin|kulit/.test(text)) score += 45;
+  if (/aesthetic|estetik|kecantikan|beauty|facial|laser|skincare/.test(text)) score += 34;
+  if (/clinic|klinik/.test(text)) score += 16;
+  if (/doctor|dokter/.test(text)) score += 12;
   if (place.rating) score += Math.min(12, Number(place.rating) * 2);
   if (place.userRatingCount) score += Math.min(10, Math.log10(Number(place.userRatingCount) + 1) * 3);
   if (place.phone || place.website || place.mapsUri) score += 5;
-  score += Math.max(0, 20 - distanceKm(userLat, userLon, place.lat, place.lon) * 1.8);
+  score += Math.max(0, 22 - distanceKm(userLat, userLon, place.lat, place.lon) * 1.15);
   return score;
 }
 
@@ -63,7 +81,7 @@ function normalizeFoursquarePlace(place, userLat, userLon) {
   const text = `${place.name || ""} ${address} ${categories.join(" ")}`;
   const type = classifyByText(text);
   const hoursText = Array.isArray(place.hours?.regular)
-    ? "Jam buka tersedia"
+    ? "Jam operasional tersedia"
     : place.hours?.display || "";
   const fsqId = place.fsq_id || place.id || `${lat},${lon}`;
 
@@ -128,24 +146,10 @@ async function searchFoursquareOnce(apiKey, lat, lon, radius, query) {
   return Array.isArray(data.results) ? data.results : [];
 }
 
-async function searchFoursquare(lat, lon, radius) {
-  const apiKey = process.env.FOURSQUARE_API_KEY || process.env.FSQ_API_KEY;
-  if (!apiKey) return null;
-
-  const queries = ["klinik kulit", "dokter kulit", "klinik kecantikan", "aesthetic clinic", "skin clinic", "beauty clinic", "skincare clinic"];
-  const results = [];
-  for (const query of queries) {
-    try {
-      const found = await searchFoursquareOnce(apiKey, lat, lon, radius, query);
-      results.push(...found);
-    } catch (error) {
-      if (!results.length) throw error;
-    }
-  }
-
+function normalizeAndSort(results, lat, lon, normalizer) {
   const seen = new Set();
-  const places = results
-    .map((place) => normalizeFoursquarePlace(place, lat, lon))
+  return results
+    .map((place) => normalizer(place, lat, lon))
     .filter(Boolean)
     .filter((place) => {
       const key = place.id || `${place.name.toLowerCase()}-${place.lat.toFixed(5)}-${place.lon.toFixed(5)}`;
@@ -155,8 +159,49 @@ async function searchFoursquare(lat, lon, radius) {
     })
     .sort((a, b) => b.score - a.score || a.distanceKm - b.distanceKm)
     .slice(0, 30);
+}
 
-  return { ok: true, source: "Foursquare Places API", radius, count: places.length, center: { lat, lon }, places };
+async function searchFoursquareAtRadius(lat, lon, radius) {
+  const apiKey = process.env.FOURSQUARE_API_KEY || process.env.FSQ_API_KEY;
+  if (!apiKey) return null;
+
+  const results = [];
+  for (const query of SEARCH_QUERIES) {
+    try {
+      const found = await searchFoursquareOnce(apiKey, lat, lon, radius, query);
+      results.push(...found);
+    } catch (error) {
+      if (!results.length) throw error;
+    }
+  }
+
+  const places = normalizeAndSort(results, lat, lon, normalizeFoursquarePlace);
+  return { places, searchedRadius: radius };
+}
+
+async function searchFoursquareExpanded(lat, lon, requestedRadius) {
+  const apiKey = process.env.FOURSQUARE_API_KEY || process.env.FSQ_API_KEY;
+  if (!apiKey) return null;
+
+  let lastPlaces = [];
+  let lastRadius = requestedRadius;
+  for (const radius of radiusSteps(requestedRadius)) {
+    const result = await searchFoursquareAtRadius(lat, lon, radius);
+    lastPlaces = result?.places || [];
+    lastRadius = radius;
+    if (lastPlaces.length > 0) break;
+  }
+
+  return {
+    ok: true,
+    source: "Foursquare Places API",
+    radius: lastRadius,
+    requestedRadius,
+    expanded: lastRadius !== requestedRadius,
+    count: lastPlaces.length,
+    center: { lat, lon },
+    places: lastPlaces,
+  };
 }
 
 function getTag(tags, keys, fallback = "") {
@@ -175,21 +220,6 @@ function classifyOsmPlace(tags = {}) {
   if (tags.shop === "beauty") return "Beauty care";
   if (tags.amenity === "pharmacy") return "Apotek";
   return "Layanan kesehatan";
-}
-
-function scoreOsmPlace(place, userLat, userLon) {
-  let score = 0;
-  const tags = place.tags || {};
-  const text = Object.values(tags).join(" ").toLowerCase();
-  if (/dermat|dokter kulit|skin specialist|sp\.kk|spkk/.test(text)) score += 50;
-  if (/skin|kulit/.test(text)) score += 35;
-  if (/aesthetic|estetik|kecantikan|beauty|facial|laser|skincare/.test(text)) score += 25;
-  if (tags.healthcare === "clinic" || tags.amenity === "clinic") score += 14;
-  if (tags.healthcare === "doctor" || tags.amenity === "doctors") score += 12;
-  if (tags.shop === "beauty") score += 10;
-  if (tags.website || tags.phone || tags["contact:phone"]) score += 4;
-  score += Math.max(0, 20 - distanceKm(userLat, userLon, place.lat, place.lon) * 2);
-  return score;
 }
 
 function normalizeOsmElement(element, userLat, userLon) {
@@ -223,15 +253,15 @@ function normalizeOsmElement(element, userLat, userLon) {
     googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lon}`)}`,
     isHighlyRelevant: hasSkinOrBeautySignal(text),
     source: "OpenStreetMap",
-    tags: { amenity: tags.amenity || "", healthcare: tags.healthcare || "", shop: tags.shop || "" },
+    rawTypes: [tags.amenity, tags.healthcare, tags.shop].filter(Boolean),
   };
-  normalized.score = scoreOsmPlace({ tags, lat, lon }, userLat, userLon);
+  normalized.score = placeScore(normalized, userLat, userLon);
   return normalized;
 }
 
-async function searchOsm(lat, lon, radius) {
+async function searchOsmAtRadius(lat, lon, radius) {
   const query = `
-    [out:json][timeout:18];
+    [out:json][timeout:20];
     (
       node(around:${radius},${lat},${lon})["healthcare"="clinic"];
       way(around:${radius},${lat},${lon})["healthcare"="clinic"];
@@ -250,7 +280,7 @@ async function searchOsm(lat, lon, radius) {
       node(around:${radius},${lat},${lon})["name"~"dermat|skin|kulit|estetik|aesthetic|beauty|facial|skincare|kecantikan",i];
       way(around:${radius},${lat},${lon})["name"~"dermat|skin|kulit|estetik|aesthetic|beauty|facial|skincare|kecantikan",i];
     );
-    out center tags 80;
+    out center tags 100;
   `;
 
   const upstream = await fetch("https://overpass-api.de/api/interpreter", {
@@ -261,20 +291,28 @@ async function searchOsm(lat, lon, radius) {
 
   if (!upstream.ok) throw new Error("Layanan peta gratis sedang sibuk. Coba lagi beberapa saat.");
   const data = await upstream.json();
-  const seen = new Set();
-  const places = (data.elements || [])
-    .map((element) => normalizeOsmElement(element, lat, lon))
-    .filter(Boolean)
-    .filter((place) => {
-      const key = `${place.name.toLowerCase()}-${place.lat.toFixed(4)}-${place.lon.toFixed(4)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => b.score - a.score || a.distanceKm - b.distanceKm)
-    .slice(0, 30);
+  return normalizeAndSort(data.elements || [], lat, lon, normalizeOsmElement);
+}
 
-  return { ok: true, source: "OpenStreetMap Overpass", radius, count: places.length, center: { lat, lon }, places };
+async function searchOsmExpanded(lat, lon, requestedRadius) {
+  let lastPlaces = [];
+  let lastRadius = requestedRadius;
+  for (const radius of radiusSteps(requestedRadius)) {
+    lastPlaces = await searchOsmAtRadius(lat, lon, radius);
+    lastRadius = radius;
+    if (lastPlaces.length > 0) break;
+  }
+
+  return {
+    ok: true,
+    source: "OpenStreetMap Overpass",
+    radius: lastRadius,
+    requestedRadius,
+    expanded: lastRadius !== requestedRadius,
+    count: lastPlaces.length,
+    center: { lat, lon },
+    places: lastPlaces,
+  };
 }
 
 export async function GET(request) {
@@ -282,7 +320,7 @@ export async function GET(request) {
     const url = new URL(request.url);
     const lat = Number(url.searchParams.get("lat"));
     const lon = Number(url.searchParams.get("lon"));
-    const radius = Math.min(15000, Math.max(1000, Number(url.searchParams.get("radius") || 6000)));
+    const requestedRadius = Math.min(MAX_RADIUS, Math.max(1000, Number(url.searchParams.get("radius") || DEFAULT_RADIUS)));
     const provider = String(url.searchParams.get("provider") || "auto").toLowerCase();
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
@@ -291,18 +329,30 @@ export async function GET(request) {
 
     if (provider !== "osm") {
       try {
-        const foursquare = await searchFoursquare(lat, lon, radius);
+        const foursquare = await searchFoursquareExpanded(lat, lon, requestedRadius);
         if (foursquare && foursquare.places.length) return json(foursquare);
         if (provider === "foursquare") {
-          return json({ ok: false, error: foursquare ? "Foursquare tidak menemukan hasil di radius ini." : "FOURSQUARE_API_KEY belum diatur di Vercel." }, foursquare ? 404 : 500);
+          const osm = await searchOsmExpanded(lat, lon, requestedRadius);
+          return json({
+            ...osm,
+            fallback: true,
+            source: osm.places.length ? "OpenStreetMap Overpass" : "Tidak ada hasil",
+            note: "Foursquare tidak menemukan lokasi pada radius maksimum. Sistem mencoba sumber terbuka sebagai cadangan.",
+          });
         }
       } catch (error) {
-        if (provider === "foursquare") return json({ ok: false, error: error?.message || "Foursquare Places API gagal." }, 502);
+        if (provider === "foursquare") {
+          const osm = await searchOsmExpanded(lat, lon, requestedRadius).catch(() => null);
+          if (osm && osm.places.length) {
+            return json({ ...osm, fallback: true, note: error?.message || "Foursquare tidak tersedia, memakai sumber terbuka." });
+          }
+          return json({ ok: false, error: error?.message || "Foursquare Places API gagal." }, 502);
+        }
       }
     }
 
-    const osm = await searchOsm(lat, lon, radius);
-    return json({ ...osm, fallback: true });
+    const osm = await searchOsmExpanded(lat, lon, requestedRadius);
+    return json({ ...osm, fallback: provider !== "osm" });
   } catch (error) {
     return json({ ok: false, error: error?.message || "Gagal mengambil lokasi terdekat." }, 500);
   }
