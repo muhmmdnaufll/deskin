@@ -5,6 +5,7 @@
   let lastPlaces = [];
   let userPosition = null;
   let activeSource = "Foursquare Places";
+  let lastAiSummary = "";
 
   boot();
 
@@ -26,13 +27,19 @@
     const oldSearch = $("#mapSearch")?.closest(".card");
     if (oldSearch) oldSearch.remove();
 
+    const visual = $("#mapVisual");
+    if (visual) visual.remove();
+
     const grid = $(".container .grid.two");
-    if (grid && grid.children.length === 1) grid.classList.remove("two");
+    if (grid) {
+      grid.classList.remove("two");
+      grid.style.display = "block";
+    }
 
     const heading = container.querySelector(".between h2");
     const desc = container.querySelector(".between .muted");
     if (heading) heading.textContent = "Klinik kulit dan kecantikan terdekat";
-    if (desc) desc.textContent = "Temukan klinik kulit, dokter kulit, klinik kecantikan, dan layanan perawatan wajah berdasarkan lokasi perangkat.";
+    if (desc) desc.textContent = "Daftar lokasi terdekat berdasarkan posisi perangkat, jarak, dan relevansi layanan.";
 
     const panel = document.createElement("section");
     panel.id = "skinMapRealPanel";
@@ -41,8 +48,8 @@
       <div class="between">
         <div>
           <p class="eyebrow">Nearby care search</p>
-          <h2>Lokasi perawatan terdekat</h2>
-          <p class="muted">Pencarian memprioritaskan Foursquare Places. Radius akan diperluas otomatis sampai menemukan lokasi terdekat, maksimal 50 km.</p>
+          <h2>Lokasi terdekat</h2>
+          <p class="muted">Hasil ditampilkan sebagai daftar lokasi beserta jarak dan tautan rute. Data lokasi diambil dari Places API; Gemini dipakai untuk merangkum pilihan terbaik dari hasil yang ditemukan.</p>
         </div>
         <span id="skinMapSourceBadge" class="pill success">Foursquare</span>
       </div>
@@ -67,6 +74,7 @@
         <strong>Lokasi belum dimuat.</strong>
         <p class="muted">Tekan Gunakan lokasi saya untuk mencari layanan terdekat.</p>
       </div>
+      <div id="skinMapAiSummary" class="panel hidden"></div>
       <div id="skinMapRealList" class="list"></div>
     `;
 
@@ -90,6 +98,13 @@
       return;
     }
 
+    const ai = event.target.closest("#skinMapAiButton");
+    if (ai) {
+      event.preventDefault();
+      summarizeWithGemini();
+      return;
+    }
+
     const route = event.target.closest("[data-open-route]");
     if (route) {
       const lat = route.dataset.lat;
@@ -102,7 +117,8 @@
     if (details) {
       const lat = details.dataset.lat;
       const lon = details.dataset.lon;
-      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lat + "," + lon)}`, "_blank", "noopener,noreferrer");
+      const name = details.dataset.name || `${lat},${lon}`;
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + " " + lat + "," + lon)}`, "_blank", "noopener,noreferrer");
     }
   }
 
@@ -132,11 +148,13 @@
 
   async function searchNearby(lat, lon) {
     const radius = Number($("#skinMapRadius")?.value || 6000);
+    lastAiSummary = "";
+    setAiSummary("", true);
     setSourceBadge("Foursquare", true);
-    setStatus("Mencari lokasi terdekat", `Radius awal ${Math.round(radius / 1000)} km. Sistem akan memperluas radius otomatis sampai maksimal 50 km jika belum ada hasil.`);
+    setStatus("Mencari lokasi terdekat", `Radius awal ${Math.round(radius / 1000)} km. Radius akan diperluas otomatis sampai maksimal 50 km jika belum ada hasil.`);
 
     try {
-      const response = await fetch(`/api/places?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}&provider=foursquare&v=serious-map-106`);
+      const response = await fetch(`/api/places?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}&provider=foursquare&v=list-only-106`);
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) throw new Error(data.error || "Gagal mengambil data lokasi.");
 
@@ -152,24 +170,20 @@
           : `Tidak ditemukan hingga radius ${radiusText}. Coba cari ulang beberapa saat lagi atau ubah lokasi perangkat.`
       );
       renderPlaces();
-      renderMapPins();
+      if (lastPlaces.length) summarizeWithGemini(true);
     } catch (error) {
       lastPlaces = [];
       setSourceBadge("Tidak tersedia", false);
       setStatus("Pencarian gagal", error.message || "Layanan pencarian lokasi sedang tidak tersedia.");
       renderPlaces();
-      renderMapPins();
     }
   }
 
-  function renderPlaces() {
-    const list = $("#skinMapRealList");
-    if (!list) return;
-
+  function filteredPlaces() {
     const query = String($("#skinMapSearch")?.value || "").toLowerCase();
     const filter = $("#skinMapFilter")?.value || "all";
 
-    const places = lastPlaces.filter((place) => {
+    return lastPlaces.filter((place) => {
       const text = `${place.name} ${place.type} ${place.address} ${(place.rawTypes || []).join(" ")}`.toLowerCase();
       const matchQuery = !query || text.includes(query);
       const type = String(place.type || "").toLowerCase();
@@ -181,27 +195,68 @@
         (filter === "pharmacy" && /apotek|pharmacy/.test(type + " " + text));
       return matchQuery && matchFilter;
     });
+  }
 
+  function renderPlaces() {
+    const list = $("#skinMapRealList");
+    if (!list) return;
+
+    const places = filteredPlaces();
     list.innerHTML = places.length
       ? places.map(placeCard).join("")
       : `<div class="panel"><strong>Tidak ada hasil sesuai filter.</strong><p class="muted">Coba pilih Semua layanan atau hapus kata pencarian. Sumber aktif: ${escapeHtml(activeSource)}.</p></div>`;
   }
 
-  function renderMapPins() {
-    const visual = $("#mapVisual");
-    if (!visual || !userPosition) return;
-    const places = lastPlaces.slice(0, 12);
-    visual.innerHTML = `<span class="pin user" style="left:50%;top:55%"><span>U</span></span>` + places.map((place, index) => {
-      const point = projectPoint(userPosition.lat, userPosition.lon, place.lat, place.lon);
-      return `<span class="pin" title="${escapeHtml(place.name)}" style="left:${point.x}%;top:${point.y}%"><span>${index + 1}</span></span>`;
-    }).join("");
+  async function summarizeWithGemini(auto = false) {
+    const box = $("#skinMapAiSummary");
+    const places = filteredPlaces().slice(0, 8);
+    if (!box || !places.length) return;
+
+    if (lastAiSummary && auto) {
+      setAiSummary(lastAiSummary);
+      return;
+    }
+
+    setAiSummary("Gemini sedang merangkum pilihan lokasi terdekat...");
+    try {
+      const payload = places.map((place, index) => ({
+        no: index + 1,
+        name: place.name,
+        type: place.type,
+        distanceKm: place.distanceKm,
+        address: place.address,
+        rating: place.rating,
+        reviewCount: place.userRatingCount,
+        source: place.source
+      }));
+
+      const response = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feature: "SKINMap",
+          message: `Berikut daftar lokasi klinik/perawatan terdekat dari API lokasi. Pilih 1-3 yang paling layak diprioritaskan berdasarkan jarak, tipe layanan, rating bila ada, dan relevansi. Jangan mengarang data baru. Jawab singkat dalam bahasa Indonesia. Data: ${JSON.stringify(payload)}`
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.error || "Gemini belum bisa merangkum lokasi.");
+      lastAiSummary = data.answer || "";
+      setAiSummary(lastAiSummary);
+    } catch (error) {
+      setAiSummary(`Ringkasan Gemini belum tersedia. Daftar lokasi tetap bisa digunakan. ${error.message || ""}`);
+    }
   }
 
-  function projectPoint(lat, lon, pLat, pLon) {
-    const scale = 26000;
-    const x = 50 + ((pLon - lon) * Math.cos((lat * Math.PI) / 180) * 111000 / scale) * 42;
-    const y = 55 - (((pLat - lat) * 111000) / scale) * 42;
-    return { x: Math.max(8, Math.min(92, x)), y: Math.max(8, Math.min(92, y)) };
+  function setAiSummary(text, hide = false) {
+    const box = $("#skinMapAiSummary");
+    if (!box) return;
+    if (hide || !text) {
+      box.classList.add("hidden");
+      box.innerHTML = "";
+      return;
+    }
+    box.classList.remove("hidden");
+    box.innerHTML = `<div class="between"><strong>Ringkasan Gemini</strong><button id="skinMapAiButton" class="ghost-btn" type="button">Perbarui</button></div><p class="muted">${formatText(text)}</p>`;
   }
 
   function placeCard(place) {
@@ -228,7 +283,7 @@
         ${phone}
         <div class="row">
           <button class="primary-btn" type="button" data-open-route="1" data-lat="${escapeAttr(place.lat)}" data-lon="${escapeAttr(place.lon)}">Rute</button>
-          <button class="secondary-btn" type="button" data-open-details="1" data-lat="${escapeAttr(place.lat)}" data-lon="${escapeAttr(place.lon)}">Buka Maps</button>
+          <button class="secondary-btn" type="button" data-open-details="1" data-lat="${escapeAttr(place.lat)}" data-lon="${escapeAttr(place.lon)}" data-name="${escapeAttr(place.name)}">Buka tempat</button>
           ${website}
           ${source}
         </div>
@@ -247,6 +302,10 @@
     const status = $("#skinMapStatus");
     if (!status) return;
     status.innerHTML = `<strong>${escapeHtml(title)}</strong><p class="muted">${escapeHtml(description || "")}</p>`;
+  }
+
+  function formatText(value) {
+    return escapeHtml(value).replace(/\n+/g, "<br>");
   }
 
   function escapeHtml(value) {
