@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = "1.0.3";
+  const APP_VERSION = "1.0.4";
   const STORE_KEY = "deskin_state_v1";
   const HW_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
   const HW_CHAR_UUID = "0000fff1-0000-1000-8000-00805f9b34fb";
@@ -966,21 +966,94 @@
     });
   }
 
+    async function askDeSkinAI(message, feature = "SKINTalk") {
+    const response = await fetch("/api/ai", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message,
+        feature
+      })
+    });
+
+    let data;
+
+    try {
+      data = await response.json();
+    } catch (error) {
+      throw new Error("Response AI tidak valid.");
+    }
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "AI gagal merespons.");
+    }
+
+    return String(data.answer || "").trim();
+  }
+
   function bindTalk() {
-    $$('[data-book-doctor]').forEach(btn => btn.addEventListener("click", () => showBooking(btn.dataset.bookDoctor)));
-    $("#chatForm").addEventListener("submit", (event) => {
+    $$('[data-book-doctor]').forEach(btn => {
+      btn.addEventListener("click", () => showBooking(btn.dataset.bookDoctor));
+    });
+
+    $("#chatForm").addEventListener("submit", async (event) => {
       event.preventDefault();
-      const text = new FormData(event.currentTarget).get("text").trim();
+
+      const form = event.currentTarget;
+      const input = form.querySelector('input[name="text"]');
+      const button = form.querySelector('button[type="submit"]');
+      const text = input.value.trim();
+
       if (!text) return;
-      state.messages.push({ from: "me", text, at: timeNow() });
-      setTimeout(() => {
-        state.messages.push({ from: "consultant", text: "Terima kasih. Saya sarankan cek SKINAnalysis terbaru dan gunakan rutinitas basic dulu selama 2 minggu.", at: timeNow() });
-        saveState();
-        renderTalk();
-      }, 250);
+
+      input.value = "";
+      button.disabled = true;
+      button.textContent = "Menjawab...";
+
+      const loadingId = uid();
+
+      state.messages.push({
+        from: "me",
+        text,
+        at: timeNow()
+      });
+
+      state.messages.push({
+        id: loadingId,
+        from: "consultant",
+        text: "DeSkin AI sedang menganalisis pertanyaan kamu...",
+        at: timeNow()
+      });
+
+      saveState();
+      renderTalk();
+
+      try {
+        const aiAnswer = await askDeSkinAI(text, "SKINTalk");
+
+        state.messages = state.messages.filter(message => message.id !== loadingId);
+
+        state.messages.push({
+          from: "consultant",
+          text: aiAnswer || "Maaf, AI belum memberi jawaban. Coba ulangi pertanyaan dengan lebih spesifik.",
+          at: timeNow()
+        });
+      } catch (error) {
+        state.messages = state.messages.filter(message => message.id !== loadingId);
+
+        state.messages.push({
+          from: "consultant",
+          text: "Maaf, DeSkin AI sedang tidak bisa diakses. Pastikan GEMINI_API_KEY sudah benar di Vercel dan file API berada di api/ai.js.",
+          at: timeNow()
+        });
+      }
+
       saveState();
       renderTalk();
     });
+
     $("#newTopic").addEventListener("click", () => {
       modal(`
         <h2 id="modalTitle">Buat topik forum</h2>
@@ -990,28 +1063,47 @@
           <button class="primary-btn" type="submit">Publikasikan</button>
         </form>
       `);
+
       $("#topicForm").addEventListener("submit", (event) => {
         event.preventDefault();
+
         const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-        state.forum.unshift({ id: uid(), author: firstName(state.profile.name), topic: data.topic, body: data.body, replies: [] });
+
+        state.forum.unshift({
+          id: uid(),
+          author: firstName(state.profile.name),
+          topic: data.topic,
+          body: data.body,
+          replies: []
+        });
+
         saveState();
         closeModal();
         renderTalk();
         toast("Topik forum dipublikasikan.");
       });
     });
+
     $("#forumList").addEventListener("click", (event) => {
       const btn = event.target.closest("button[data-reply]");
+
       if (!btn) return;
+
       const topic = state.forum.find(f => f.id === btn.dataset.reply);
       const reply = prompt("Tulis balasan:");
+
       if (!topic || !reply) return;
+
       topic.replies.push(reply);
       saveState();
       renderTalk();
     });
+
     const chat = $("#chatBox");
-    if (chat) chat.scrollTop = chat.scrollHeight;
+
+    if (chat) {
+      chat.scrollTop = chat.scrollHeight;
+    }
   }
 
   function showBooking(id) {
@@ -1131,7 +1223,21 @@
     `;
   }
 
-  function messageHtml(message) {
+    function messageHtml(message) {
+    return `
+      <div class="message ${message.from === "me" ? "me" : ""}">
+        <p>${formatMessageText(message.text)}</p>
+        <small>${escapeHtml(message.at || "")}</small>
+      </div>
+    `;
+  }
+
+  function formatMessageText(value) {
+    return escapeHtml(value)
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n{3,}/g, "\n\n")
+      .replaceAll("\n", "<br>");
+  }
     return `<div class="message ${message.from === "me" ? "me" : ""}">${escapeHtml(message.text)}<small>${escapeHtml(message.at)}</small></div>`;
   }
 
@@ -1342,171 +1448,4 @@
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>'"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[ch]));
   }
-})();
-async function askDeSkinAI(message, feature = "general") {
-  const response = await fetch("/api/ai", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      message,
-      feature,
-    }),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok || !data.ok) {
-    throw new Error(data.error || "AI gagal merespons.");
-  }
-
-  return data.answer;
-}
-(() => {
-  if (window.__deskinAiChatPatched) return;
-  window.__deskinAiChatPatched = true;
-
-  async function askDeSkinAI(message, feature = "SKINTalk") {
-    const response = await fetch("/api/ai", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        message,
-        feature
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      throw new Error(data.error || "AI gagal merespons.");
-    }
-
-    return data.answer;
-  }
-
-  function getTimeNow() {
-    if (typeof timeNow === "function") return timeNow();
-
-    return new Date().toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit"
-    });
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  function saveChatMessage(message) {
-    if (typeof state !== "undefined" && Array.isArray(state.messages)) {
-      state.messages.push(message);
-    }
-
-    if (typeof saveState === "function") {
-      saveState();
-    }
-  }
-
-  function addChatMessage(message) {
-    const chatBox = document.querySelector("#chatBox");
-    if (!chatBox) return null;
-
-    if (typeof messageHtml === "function") {
-      chatBox.insertAdjacentHTML("beforeend", messageHtml(message));
-    } else {
-      const isMe = message.from === "me";
-      chatBox.insertAdjacentHTML(
-        "beforeend",
-        `
-          <div class="message ${isMe ? "me" : ""}">
-            <p>${escapeHtml(message.text)}</p>
-            <small>${escapeHtml(message.at)}</small>
-          </div>
-        `
-      );
-    }
-
-    chatBox.scrollTop = chatBox.scrollHeight;
-    return chatBox.lastElementChild;
-  }
-
-  document.addEventListener(
-    "submit",
-    async (event) => {
-      const form = event.target;
-
-      if (!form || form.id !== "chatForm") return;
-
-      event.preventDefault();
-      event.stopImmediatePropagation();
-
-      const input = form.querySelector('input[name="text"]');
-      const button = form.querySelector('button[type="submit"]');
-
-      if (!input || !button) return;
-
-      const text = input.value.trim();
-      if (!text) return;
-
-      const userMessage = {
-        from: "me",
-        text,
-        at: getTimeNow()
-      };
-
-      saveChatMessage(userMessage);
-      addChatMessage(userMessage);
-
-      input.value = "";
-      button.disabled = true;
-      button.textContent = "Menjawab...";
-
-      const loadingMessage = {
-        from: "consultant",
-        text: "DeSkin AI sedang menganalisis pertanyaan kamu...",
-        at: getTimeNow()
-      };
-
-      const loadingElement = addChatMessage(loadingMessage);
-
-      try {
-        const aiAnswer = await askDeSkinAI(text, "SKINTalk");
-
-        if (loadingElement) loadingElement.remove();
-
-        const aiMessage = {
-          from: "consultant",
-          text: aiAnswer,
-          at: getTimeNow()
-        };
-
-        saveChatMessage(aiMessage);
-        addChatMessage(aiMessage);
-      } catch (error) {
-        if (loadingElement) loadingElement.remove();
-
-        const errorMessage = {
-          from: "consultant",
-          text:
-            "Maaf, DeSkin AI sedang tidak bisa diakses. Pastikan GEMINI_API_KEY sudah benar di Vercel dan file API berada di api/ai.js.",
-          at: getTimeNow()
-        };
-
-        addChatMessage(errorMessage);
-      } finally {
-        button.disabled = false;
-        button.textContent = "Kirim";
-      }
-    },
-    true
-  );
 })();
