@@ -1367,3 +1367,39 @@ textarea {
     animation: none !important;
   }
 }
+.chat-box {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.message {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  white-space: normal;
+}
+
+.message p {
+  margin: 0;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.55;
+}
+
+.message small {
+  display: block;
+  margin-top: 14px;
+}
+
+@media (max-width: 520px) {
+  .message {
+    max-width: 92%;
+  }
+
+  .message p {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+}
