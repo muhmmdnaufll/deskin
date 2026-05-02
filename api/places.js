@@ -49,6 +49,124 @@ function placeScore(place, userLat, userLon) {
   return score;
 }
 
+function normalizeFoursquarePlace(place, userLat, userLon) {
+  const lat = place.geocodes?.main?.latitude || place.latitude;
+  const lon = place.geocodes?.main?.longitude || place.longitude;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  const categories = Array.isArray(place.categories) ? place.categories.map((cat) => cat.name).filter(Boolean) : [];
+  const address = place.location?.formatted_address || [
+    place.location?.address,
+    place.location?.locality,
+    place.location?.region,
+  ].filter(Boolean).join(", ");
+  const text = `${place.name || ""} ${address} ${categories.join(" ")}`;
+  const type = classifyByText(text);
+  const hoursText = Array.isArray(place.hours?.regular)
+    ? "Jam buka tersedia"
+    : place.hours?.display || "";
+  const fsqId = place.fsq_id || place.id || `${lat},${lon}`;
+
+  const normalized = {
+    id: fsqId,
+    name: place.name || "Lokasi tanpa nama",
+    type,
+    distanceKm: Number(distanceKm(userLat, userLon, lat, lon).toFixed(2)),
+    lat,
+    lon,
+    address,
+    phone: place.tel || "",
+    website: place.website || "",
+    openingHours: hoursText,
+    openNow: typeof place.hours?.open_now === "boolean" ? place.hours.open_now : null,
+    rating: place.rating || null,
+    userRatingCount: place.stats?.total_ratings || null,
+    googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lon}`)}`,
+    isHighlyRelevant: hasSkinOrBeautySignal(text),
+    source: "Foursquare Places",
+    rawTypes: categories,
+  };
+  normalized.score = placeScore(normalized, userLat, userLon);
+  return normalized;
+}
+
+async function searchFoursquareOnce(apiKey, lat, lon, radius, query) {
+  const fields = [
+    "fsq_id",
+    "name",
+    "geocodes",
+    "location",
+    "categories",
+    "distance",
+    "tel",
+    "website",
+    "hours",
+    "rating",
+    "stats",
+  ].join(",");
+
+  const params = new URLSearchParams({
+    ll: `${lat},${lon}`,
+    radius: String(radius),
+    query,
+    limit: "30",
+    sort: "RELEVANCE",
+    locale: "id",
+    fields,
+  });
+
+  const response = await fetch(`https://api.foursquare.com/v3/places/search?${params.toString()}`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: apiKey,
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error || "Foursquare Places API gagal mengambil data.");
+  }
+  return Array.isArray(data.results) ? data.results : [];
+}
+
+async function searchFoursquare(lat, lon, radius) {
+  const apiKey = process.env.FOURSQUARE_API_KEY || process.env.FSQ_API_KEY;
+  if (!apiKey) return null;
+
+  const queries = ["klinik kulit", "dokter kulit", "klinik kecantikan", "aesthetic clinic", "skin clinic"];
+  const results = [];
+  for (const query of queries) {
+    try {
+      const found = await searchFoursquareOnce(apiKey, lat, lon, radius, query);
+      results.push(...found);
+    } catch (error) {
+      if (!results.length) throw error;
+    }
+  }
+
+  const seen = new Set();
+  const places = results
+    .map((place) => normalizeFoursquarePlace(place, lat, lon))
+    .filter(Boolean)
+    .filter((place) => {
+      const key = place.id || `${place.name.toLowerCase()}-${place.lat.toFixed(5)}-${place.lon.toFixed(5)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => b.score - a.score || a.distanceKm - b.distanceKm)
+    .slice(0, 30);
+
+  return {
+    ok: true,
+    source: "Foursquare Places API",
+    radius,
+    count: places.length,
+    center: { lat, lon },
+    places,
+  };
+}
+
 function normalizeGooglePlace(place, userLat, userLon) {
   const lat = place.location?.latitude;
   const lon = place.location?.longitude;
@@ -132,9 +250,7 @@ async function searchGooglePlaces(lat, lon, radius) {
   });
 
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data?.error?.message || "Google Places API gagal mengambil data.");
-  }
+  if (!response.ok) throw new Error(data?.error?.message || "Google Places API gagal mengambil data.");
 
   const seen = new Set();
   const places = (data.places || [])
@@ -149,20 +265,11 @@ async function searchGooglePlaces(lat, lon, radius) {
     .sort((a, b) => b.score - a.score || a.distanceKm - b.distanceKm)
     .slice(0, 25);
 
-  return {
-    ok: true,
-    source: "Google Places API",
-    radius,
-    count: places.length,
-    center: { lat, lon },
-    places,
-  };
+  return { ok: true, source: "Google Places API", radius, count: places.length, center: { lat, lon }, places };
 }
 
 function getTag(tags, keys, fallback = "") {
-  for (const key of keys) {
-    if (tags && tags[key]) return String(tags[key]);
-  }
+  for (const key of keys) if (tags && tags[key]) return String(tags[key]);
   return fallback;
 }
 
@@ -224,11 +331,7 @@ function normalizeOsmElement(element, userLat, userLon) {
     googleMapsUri: "",
     isHighlyRelevant: hasSkinOrBeautySignal(text),
     source: "OpenStreetMap",
-    tags: {
-      amenity: tags.amenity || "",
-      healthcare: tags.healthcare || "",
-      shop: tags.shop || "",
-    },
+    tags: { amenity: tags.amenity || "", healthcare: tags.healthcare || "", shop: tags.shop || "" },
   };
   normalized.score = scoreOsmPlace({ tags, lat, lon }, userLat, userLon);
   return normalized;
@@ -260,10 +363,7 @@ async function searchOsm(lat, lon, radius) {
 
   const upstream = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-      "User-Agent": "DeSkin-SKINMap/1.0.6",
-    },
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=utf-8", "User-Agent": "DeSkin-SKINMap/1.0.6" },
     body: new URLSearchParams({ data: query }),
   });
 
@@ -282,14 +382,7 @@ async function searchOsm(lat, lon, radius) {
     .sort((a, b) => b.score - a.score || a.distanceKm - b.distanceKm)
     .slice(0, 30);
 
-  return {
-    ok: true,
-    source: "OpenStreetMap Overpass",
-    radius,
-    count: places.length,
-    center: { lat, lon },
-    places,
-  };
+  return { ok: true, source: "OpenStreetMap Overpass", radius, count: places.length, center: { lat, lon }, places };
 }
 
 export async function GET(request) {
@@ -304,32 +397,31 @@ export async function GET(request) {
       return json({ ok: false, error: "Koordinat lokasi tidak valid." }, 400);
     }
 
+    if (!["google", "osm"].includes(provider)) {
+      try {
+        const foursquare = await searchFoursquare(lat, lon, radius);
+        if (foursquare && foursquare.places.length) return json(foursquare);
+        if (provider === "foursquare") {
+          return json({ ok: false, error: foursquare ? "Foursquare tidak menemukan hasil di radius ini." : "FOURSQUARE_API_KEY belum diatur di Vercel." }, foursquare ? 404 : 500);
+        }
+      } catch (error) {
+        if (provider === "foursquare") return json({ ok: false, error: error?.message || "Foursquare Places API gagal." }, 502);
+      }
+    }
+
     if (provider !== "osm") {
       try {
         const google = await searchGooglePlaces(lat, lon, radius);
         if (google && google.places.length) return json(google);
-        if (provider === "google") {
-          return json({
-            ok: false,
-            error: google ? "Google Places tidak menemukan hasil di radius ini." : "GOOGLE_MAPS_API_KEY belum diatur di Vercel.",
-          }, google ? 404 : 500);
-        }
+        if (provider === "google") return json({ ok: false, error: google ? "Google Places tidak menemukan hasil di radius ini." : "GOOGLE_MAPS_API_KEY belum diatur di Vercel." }, google ? 404 : 500);
       } catch (error) {
-        if (provider === "google") {
-          return json({ ok: false, error: error?.message || "Google Places API gagal." }, 502);
-        }
+        if (provider === "google") return json({ ok: false, error: error?.message || "Google Places API gagal." }, 502);
       }
     }
 
     const osm = await searchOsm(lat, lon, radius);
     return json({ ...osm, fallback: true });
   } catch (error) {
-    return json(
-      {
-        ok: false,
-        error: error?.message || "Gagal mengambil lokasi terdekat.",
-      },
-      500
-    );
+    return json({ ok: false, error: error?.message || "Gagal mengambil lokasi terdekat." }, 500);
   }
 }
