@@ -4,7 +4,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   let lastPlaces = [];
   let userPosition = null;
-  let activeSource = "Foursquare / OSM";
+  let activeSource = "Foursquare Places";
 
   boot();
 
@@ -23,10 +23,16 @@
     const container = $(".container.stack") || $(".container");
     if (!container) return;
 
-    const originalList = $("#locationList");
-    if (originalList) {
-      originalList.innerHTML = `<p class="muted">Tekan Gunakan lokasi saya untuk menampilkan klinik kulit/kecantikan terdekat.</p>`;
-    }
+    const oldSearch = $("#mapSearch")?.closest(".card");
+    if (oldSearch) oldSearch.remove();
+
+    const grid = $(".container .grid.two");
+    if (grid && grid.children.length === 1) grid.classList.remove("two");
+
+    const heading = container.querySelector(".between h2");
+    const desc = container.querySelector(".between .muted");
+    if (heading) heading.textContent = "Klinik kulit dan kecantikan terdekat";
+    if (desc) desc.textContent = "Temukan klinik kulit, dokter kulit, klinik kecantikan, dan layanan perawatan wajah berdasarkan lokasi perangkat.";
 
     const panel = document.createElement("section");
     panel.id = "skinMapRealPanel";
@@ -34,32 +40,32 @@
     panel.innerHTML = `
       <div class="between">
         <div>
-          <p class="eyebrow">Real nearby search</p>
-          <h2>Klinik kulit & kecantikan terdekat</h2>
-          <p class="muted">Menggunakan Foursquare Places API sebagai sumber utama. Jika API key belum terbaca atau limit, otomatis fallback ke OpenStreetMap.</p>
+          <p class="eyebrow">Nearby care search</p>
+          <h2>Lokasi perawatan terdekat</h2>
+          <p class="muted">Pencarian memprioritaskan Foursquare Places. Radius akan diperluas otomatis sampai menemukan lokasi terdekat, maksimal 50 km.</p>
         </div>
         <span id="skinMapSourceBadge" class="pill success">Foursquare</span>
       </div>
       <div class="row">
-        <select id="skinMapRadius" aria-label="Radius pencarian">
-          <option value="3000">3 km</option>
-          <option value="6000" selected>6 km</option>
-          <option value="10000">10 km</option>
-          <option value="15000">15 km</option>
+        <select id="skinMapRadius" aria-label="Radius awal pencarian">
+          <option value="3000">Mulai 3 km</option>
+          <option value="6000" selected>Mulai 6 km</option>
+          <option value="10000">Mulai 10 km</option>
+          <option value="15000">Mulai 15 km</option>
         </select>
         <select id="skinMapFilter" aria-label="Filter lokasi">
-          <option value="all">Semua</option>
+          <option value="all">Semua layanan</option>
           <option value="skin">Klinik kulit</option>
           <option value="beauty">Klinik kecantikan</option>
-          <option value="clinic">Klinik umum</option>
+          <option value="clinic">Klinik/dokter</option>
           <option value="pharmacy">Apotek</option>
         </select>
-        <input id="skinMapSearch" placeholder="Cari nama lokasi..." />
+        <input id="skinMapSearch" placeholder="Cari nama lokasi atau alamat..." />
         <button id="skinMapRefresh" class="secondary-btn" type="button">Cari ulang</button>
       </div>
       <div id="skinMapStatus" class="panel">
-        <strong>Belum mencari lokasi.</strong>
-        <p class="muted">Klik tombol Gunakan lokasi saya di atas untuk mulai.</p>
+        <strong>Lokasi belum dimuat.</strong>
+        <p class="muted">Tekan Gunakan lokasi saya untuk mencari layanan terdekat.</p>
       </div>
       <div id="skinMapRealList" class="list"></div>
     `;
@@ -101,21 +107,17 @@
   }
 
   function handleInput(event) {
-    if (["skinMapSearch", "skinMapFilter"].includes(event.target?.id)) {
-      renderPlaces();
-    }
-    if (event.target?.id === "skinMapRadius" && userPosition) {
-      searchNearby(userPosition.lat, userPosition.lon);
-    }
+    if (["skinMapSearch", "skinMapFilter"].includes(event.target?.id)) renderPlaces();
+    if (event.target?.id === "skinMapRadius" && userPosition) searchNearby(userPosition.lat, userPosition.lon);
   }
 
   function requestLocationAndSearch() {
     if (!navigator.geolocation) {
-      setStatus("Geolocation tidak tersedia", "Browser ini belum mendukung akses lokasi.");
+      setStatus("Akses lokasi tidak tersedia", "Browser ini belum mendukung pengambilan lokasi perangkat.");
       return;
     }
 
-    setStatus("Meminta izin lokasi...", "Izinkan akses lokasi agar DeSkin dapat mencari klinik terdekat.");
+    setStatus("Meminta izin lokasi", "Izinkan akses lokasi agar DeSkin dapat mencari layanan terdekat dari posisi kamu.");
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const lat = position.coords.latitude;
@@ -123,9 +125,7 @@
         userPosition = { lat, lon };
         searchNearby(lat, lon);
       },
-      () => {
-        setStatus("Izin lokasi ditolak", "Aktifkan izin lokasi di browser, lalu tekan Cari ulang.");
-      },
+      () => setStatus("Izin lokasi ditolak", "Aktifkan izin lokasi di browser, lalu tekan Cari ulang."),
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 300000 }
     );
   }
@@ -133,29 +133,32 @@
   async function searchNearby(lat, lon) {
     const radius = Number($("#skinMapRadius")?.value || 6000);
     setSourceBadge("Foursquare", true);
-    setStatus("Mencari lokasi terdekat...", `Mengutamakan Foursquare Places API. Radius ${Math.round(radius / 1000)} km dari posisi kamu.`);
+    setStatus("Mencari lokasi terdekat", `Radius awal ${Math.round(radius / 1000)} km. Sistem akan memperluas radius otomatis sampai maksimal 50 km jika belum ada hasil.`);
 
     try {
-      const response = await fetch(`/api/places?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}&provider=foursquare&v=fsq106`);
+      const response = await fetch(`/api/places?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&radius=${encodeURIComponent(radius)}&provider=foursquare&v=serious-map-106`);
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) throw new Error(data.error || "Gagal mengambil data lokasi.");
 
       activeSource = data.source || "Places API";
       setSourceBadge(activeSource, !data.fallback);
       lastPlaces = Array.isArray(data.places) ? data.places : [];
+
+      const radiusText = data.radius ? `${Math.round(data.radius / 1000)} km` : `${Math.round(radius / 1000)} km`;
       setStatus(
-        lastPlaces.length ? `${lastPlaces.length} lokasi ditemukan` : "Belum ada lokasi ditemukan",
+        lastPlaces.length ? `${lastPlaces.length} lokasi ditemukan` : "Tidak ada lokasi ditemukan",
         lastPlaces.length
-          ? `Sumber aktif: ${activeSource}. Hasil diurutkan berdasarkan relevansi klinik kulit/kecantikan dan jarak.`
-          : `Sumber aktif: ${activeSource}. Coba radius lebih besar.`
+          ? `${data.expanded ? "Radius diperluas otomatis. " : ""}Sumber aktif: ${activeSource}. Radius pencarian: ${radiusText}. Hasil diurutkan berdasarkan relevansi dan jarak.`
+          : `Tidak ditemukan hingga radius ${radiusText}. Coba cari ulang beberapa saat lagi atau ubah lokasi perangkat.`
       );
       renderPlaces();
       renderMapPins();
     } catch (error) {
       lastPlaces = [];
-      setSourceBadge("Foursquare gagal", false);
-      setStatus("Pencarian gagal", error.message || "Layanan peta sedang sibuk. Coba lagi nanti.");
+      setSourceBadge("Tidak tersedia", false);
+      setStatus("Pencarian gagal", error.message || "Layanan pencarian lokasi sedang tidak tersedia.");
       renderPlaces();
+      renderMapPins();
     }
   }
 
@@ -181,7 +184,7 @@
 
     list.innerHTML = places.length
       ? places.map(placeCard).join("")
-      : `<div class="panel"><strong>Tidak ada hasil sesuai filter.</strong><p class="muted">Coba ganti filter, radius, atau kata pencarian. Sumber aktif: ${escapeHtml(activeSource)}.</p></div>`;
+      : `<div class="panel"><strong>Tidak ada hasil sesuai filter.</strong><p class="muted">Coba pilih Semua layanan atau hapus kata pencarian. Sumber aktif: ${escapeHtml(activeSource)}.</p></div>`;
   }
 
   function renderMapPins() {
@@ -195,14 +198,14 @@
   }
 
   function projectPoint(lat, lon, pLat, pLon) {
-    const scale = 9000;
+    const scale = 26000;
     const x = 50 + ((pLon - lon) * Math.cos((lat * Math.PI) / 180) * 111000 / scale) * 42;
     const y = 55 - (((pLat - lat) * 111000) / scale) * 42;
     return { x: Math.max(8, Math.min(92, x)), y: Math.max(8, Math.min(92, y)) };
   }
 
   function placeCard(place) {
-    const relevance = place.isHighlyRelevant ? `<span class="pill success">Relevan</span>` : `<span class="tag">Umum</span>`;
+    const relevance = place.isHighlyRelevant ? `<span class="pill success">Sesuai</span>` : `<span class="tag">Terkait</span>`;
     const address = place.address ? `<p class="muted">${escapeHtml(place.address)}</p>` : "";
     const open = place.openingHours ? `<p class="muted">Jam: ${escapeHtml(place.openingHours)}</p>` : "";
     const phone = place.phone ? `<p class="muted">Telp: ${escapeHtml(place.phone)}</p>` : "";
@@ -237,7 +240,7 @@
     const badge = $("#skinMapSourceBadge");
     if (!badge) return;
     badge.className = isPrimary ? "pill success" : "pill warn";
-    badge.textContent = source.includes("Foursquare") ? "Foursquare" : source.includes("OpenStreetMap") ? "OSM fallback" : source;
+    badge.textContent = source.includes("Foursquare") ? "Foursquare" : source.includes("OpenStreetMap") ? "Cadangan" : source;
   }
 
   function setStatus(title, description) {
