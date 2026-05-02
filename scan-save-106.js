@@ -35,7 +35,7 @@
       <div>
         <p class="eyebrow">Local scan</p>
         <h2>Hasil scan wajah lokal</h2>
-        <p class="muted">Scan berjalan langsung di browser tanpa kirim foto ke API, jadi tidak memakai limit Gemini. Gambar tembok/benda akan ditolak dengan deteksi lokal.</p>
+        <p class="muted">Scan berjalan langsung di browser. Gambar tembok/benda akan ditolak.</p>
       </div>
       <div id="scanResultBody" class="stack">
         <div class="panel">
