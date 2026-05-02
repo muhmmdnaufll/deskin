@@ -492,7 +492,7 @@
             </div>
             <label>Catatan<textarea name="notes" placeholder="Contoh: area T-zone berminyak, jerawat aktif di dagu..."></textarea></label>
             <button class="primary-btn" type="submit">Simpan ke SKINAnalysis</button>
-            <p class="muted">Untuk AI produksi, sambungkan form ini ke endpoint model dermatology/vision milik Anda.</p>
+            <p class="muted"></p>
           </form>
         </div>
       </section>
