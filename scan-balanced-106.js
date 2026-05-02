@@ -38,7 +38,7 @@
       <div>
         <p class="eyebrow">Balanced local scan</p>
         <h2>Hasil scan wajah lokal</h2>
-        <p class="muted">Standar diperbaiki: wajah dekat tetap diterima selama gambar tidak polos seperti tembok, cukup tajam, dan area kulit berada di tengah.</p>
+        <p class="muted">Pastikan wajah terlihat jelas.</p>
       </div>
       <div id="scanResultBody" class="stack">
         <div class="panel">
