@@ -1,0 +1,118 @@
+:root {
+  --signature-ink: #061b33;
+  --signature-blue: #063b75;
+  --signature-calm: #eaf6ff;
+  --signature-glow: rgba(68, 154, 255, .16);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(56, 145, 255, .11), transparent 28%),
+    radial-gradient(circle at 86% 18%, rgba(0, 184, 169, .10), transparent 25%);
+  z-index: -1;
+}
+
+.brand-mark {
+  background: linear-gradient(145deg, var(--signature-blue), #21a7c7) !important;
+  box-shadow: 0 14px 34px var(--signature-glow);
+}
+
+.signature-card {
+  border: 1px solid rgba(6, 59, 117, .12);
+  background: linear-gradient(145deg, rgba(255,255,255,.86), rgba(234,246,255,.72));
+}
+
+.signature-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  color: var(--signature-blue);
+  letter-spacing: .02em;
+}
+
+.signature-line::before {
+  content: "";
+  width: 34px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--signature-blue), #27bdd0);
+}
+
+.naufal-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.naufal-hero::after {
+  content: "N";
+  position: absolute;
+  right: clamp(18px, 5vw, 70px);
+  bottom: -42px;
+  font-size: clamp(120px, 22vw, 260px);
+  line-height: 1;
+  font-weight: 900;
+  color: rgba(6, 59, 117, .05);
+  pointer-events: none;
+}
+
+.auth-choice {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.auth-choice button {
+  min-height: 56px;
+  justify-content: center;
+}
+
+.auth-choice button.active {
+  background: var(--signature-blue);
+  color: white;
+  border-color: transparent;
+}
+
+.secure-note {
+  padding: 12px 14px;
+  border: 1px solid rgba(6, 59, 117, .15);
+  border-radius: 18px;
+  background: rgba(234, 246, 255, .72);
+  color: var(--muted);
+  font-size: .94rem;
+}
+
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #20c997;
+  box-shadow: 0 0 0 5px rgba(32, 201, 151, .14);
+}
+
+.app-section-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.app-section-tabs a {
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .auth-choice {
+    grid-template-columns: 1fr;
+  }
+}
