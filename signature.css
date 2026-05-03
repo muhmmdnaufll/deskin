@@ -1,8 +1,10 @@
 :root {
-  --signature-ink: #061b33;
-  --signature-blue: #063b75;
-  --signature-calm: #eaf6ff;
-  --signature-glow: rgba(68, 154, 255, .16);
+  --flow-ink: #061b33;
+  --flow-blue: #063b75;
+  --flow-aqua: #21a7c7;
+  --flow-calm: #eaf6ff;
+  --flow-soft: rgba(6, 59, 117, .08);
+  --flow-glow: rgba(68, 154, 255, .16);
 }
 
 body::before {
@@ -11,52 +13,67 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 12% 12%, rgba(56, 145, 255, .11), transparent 28%),
-    radial-gradient(circle at 86% 18%, rgba(0, 184, 169, .10), transparent 25%);
+    radial-gradient(circle at 10% 8%, rgba(56, 145, 255, .10), transparent 28%),
+    radial-gradient(circle at 92% 18%, rgba(0, 184, 169, .09), transparent 24%),
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(6,59,117,.025));
   z-index: -1;
 }
 
 .brand-mark {
-  background: linear-gradient(145deg, var(--signature-blue), #21a7c7) !important;
-  box-shadow: 0 14px 34px var(--signature-glow);
+  background: linear-gradient(145deg, var(--flow-blue), var(--flow-aqua)) !important;
+  box-shadow: 0 14px 34px var(--flow-glow);
+}
+
+.card,
+.product-card,
+.article-card,
+.doctor-card,
+.device-card,
+.side-card,
+.panel,
+.map-card,
+.plan-card {
+  border-radius: 24px;
 }
 
 .signature-card {
   border: 1px solid rgba(6, 59, 117, .12);
-  background: linear-gradient(145deg, rgba(255,255,255,.86), rgba(234,246,255,.72));
+  background: linear-gradient(145deg, rgba(255,255,255,.86), rgba(234,246,255,.70));
 }
 
-.signature-line {
+.flow-line {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   font-weight: 800;
-  color: var(--signature-blue);
-  letter-spacing: .02em;
+  color: var(--flow-blue);
+  letter-spacing: .01em;
 }
 
-.signature-line::before {
+.flow-line::before {
   content: "";
   width: 34px;
   height: 3px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--signature-blue), #27bdd0);
+  background: linear-gradient(90deg, var(--flow-blue), var(--flow-aqua));
 }
 
-.naufal-hero {
+.flow-hero {
   position: relative;
   overflow: hidden;
 }
 
-.naufal-hero::after {
-  content: "N";
+.flow-hero::after {
+  content: "";
   position: absolute;
-  right: clamp(18px, 5vw, 70px);
-  bottom: -42px;
-  font-size: clamp(120px, 22vw, 260px);
-  line-height: 1;
-  font-weight: 900;
-  color: rgba(6, 59, 117, .05);
+  width: clamp(130px, 22vw, 280px);
+  aspect-ratio: 1;
+  right: clamp(-82px, -4vw, -28px);
+  bottom: clamp(-92px, -7vw, -36px);
+  border-radius: 42% 58% 50% 50%;
+  background:
+    radial-gradient(circle at 38% 35%, rgba(33,167,199,.18), transparent 38%),
+    radial-gradient(circle at 62% 58%, rgba(6,59,117,.11), transparent 44%);
   pointer-events: none;
 }
 
@@ -72,12 +89,13 @@ body::before {
 }
 
 .auth-choice button.active {
-  background: var(--signature-blue);
+  background: var(--flow-blue);
   color: white;
   border-color: transparent;
 }
 
-.secure-note {
+.secure-note,
+.flow-note {
   padding: 12px 14px;
   border: 1px solid rgba(6, 59, 117, .15);
   border-radius: 18px;
