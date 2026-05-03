@@ -1,6 +1,8 @@
 {
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/app.html" }
+  "version": 2,
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(assets|main.css|signature.css|app-core.js|flow-ui.js|scan.js|ai-ui.js|manifest.webmanifest|service-worker.js)(.*)", "dest": "/$1$2" },
+    { "src": "/.*", "dest": "/app.html" }
   ]
 }
