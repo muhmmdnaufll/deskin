@@ -109,48 +109,6 @@ export async function POST(request) {
       );
     }
 
-    const textPrompt = isVisionScan
-      ? `
-Kamu adalah modul visual DeSkin untuk estimasi edukatif kondisi kulit dari gambar.
-Tugas: lihat gambar yang dikirim dan tentukan apakah gambar tersebut benar-benar wajah manusia atau area kulit manusia yang cukup jelas.
-
-Jika gambar BUKAN wajah/kulit manusia yang jelas (misalnya tembok, meja, benda, langit, sangat blur, terlalu gelap, atau wajah tidak tampak), wajib kembalikan:
-{
-  "isSkinImage": false,
-  "confidence": 0-40,
-  "moisture": 50,
-  "sebum": 50,
-  "texture": 50,
-  "acne": 50,
-  "sensitivity": 50,
-  "skinType": "unknown",
-  "concerns": [],
-  "summary": "Gambar tidak cukup valid untuk scan kulit. Arahkan kamera ke wajah/area kulit yang jelas.",
-  "safetyNote": "Hasil scan tidak dibuat karena gambar bukan kulit/wajah yang jelas."
-}
-
-Jika gambar adalah wajah/kulit manusia yang cukup jelas, estimasikan parameter 0-100:
-- moisture: makin tinggi berarti kulit terlihat lebih terhidrasi
-- sebum: makin tinggi berarti terlihat lebih berminyak
-- texture: makin tinggi berarti tekstur terlihat lebih rata/halus
-- acne: makin tinggi berarti tanda jerawat/kemerahan/komedo aktif lebih terlihat
-- sensitivity: makin tinggi berarti tanda kemerahan/iritasi lebih terlihat
-
-Kembalikan JSON SAJA tanpa markdown, tanpa teks tambahan:
-{
-  "isSkinImage": true,
-  "confidence": 0-100,
-  "moisture": 0-100,
-  "sebum": 0-100,
-  "texture": 0-100,
-  "acne": 0-100,
-  "sensitivity": 0-100,
-  "skinType": "oily" | "dry" | "normal" | "combination" | "sensitive" | "unknown",
-  "concerns": ["acne" | "oil" | "dry" | "texture" | "pores" | "redness"],
-  "summary": "ringkasan singkat hasil visual",
-  "safetyNote": "hasil adalah estimasi visual edukatif, bukan diagnosis medis"
-}
-
 Catatan pengguna:
 ${message || "Scan gambar dari kamera/upload."}
 `
