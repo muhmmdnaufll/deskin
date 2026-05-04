@@ -26,7 +26,7 @@ function cookie(value, maxAge = MAX_AGE) {
 function env() {
   return {
     url: String(process.env.SUPABASE_URL || "").replace(/\/$/, ""),
-    key: String(process.env.SUPABASE_ANON_KEY || ""),
+    key: String(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || ""),
   };
 }
 
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
       return json(res, 503, {
         ok: false,
         code: "AUTH_NOT_CONFIGURED",
-        error: "Login aman belum aktif. Tambahkan SUPABASE_URL dan SUPABASE_ANON_KEY di Vercel Environment Variables.",
+        error: "Login belum aktif. Tambahkan SUPABASE_URL dan SUPABASE_PUBLISHABLE_KEY di Vercel Environment Variables.",
       });
     }
 
@@ -99,10 +99,7 @@ export default async function handler(req, res) {
     const password = String(body.password || "");
     const name = String(body.name || "").trim();
 
-    if (action === "logout") {
-      return json(res, 200, { ok: true }, { "Set-Cookie": cookie("", 0) });
-    }
-
+    if (action === "logout") return json(res, 200, { ok: true }, { "Set-Cookie": cookie("", 0) });
     if (!email || !password) return json(res, 400, { ok: false, error: "Email dan password wajib diisi." });
     if (password.length < 8) return json(res, 400, { ok: false, error: "Password minimal 8 karakter." });
 
@@ -124,11 +121,7 @@ export default async function handler(req, res) {
     const accessToken = data.access_token;
     const user = data.user || (accessToken ? await getUser(accessToken).catch(() => null) : null);
     if (!accessToken && action === "register") {
-      return json(res, 200, {
-        ok: true,
-        needsEmailConfirmation: true,
-        message: "Daftar berhasil. Cek email untuk konfirmasi sebelum login.",
-      });
+      return json(res, 200, { ok: true, needsEmailConfirmation: true, message: "Daftar berhasil. Cek email untuk konfirmasi sebelum login." });
     }
     if (!accessToken) return json(res, 401, { ok: false, error: "Login belum berhasil." });
 
