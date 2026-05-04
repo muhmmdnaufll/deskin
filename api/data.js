@@ -17,17 +17,31 @@ function parseCookies(header = "") {
   );
 }
 
+function normalizeSupabaseUrl(raw) {
+  const value = String(raw || "").trim().replace(/\/$/, "");
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    const project = url.pathname.match(/\/project\/([a-z0-9]{10,})/i)?.[1];
+    if (url.hostname === "supabase.com" && project) return `https://${project}.supabase.co`;
+    if (url.hostname.endsWith(".supabase.co")) return url.origin;
+    return value;
+  } catch {
+    return value;
+  }
+}
+
 function env() {
   return {
-    url: String(process.env.SUPABASE_URL || "").replace(/\/$/, ""),
-    anon: String(process.env.SUPABASE_ANON_KEY || ""),
-    service: String(process.env.SUPABASE_SERVICE_ROLE_KEY || ""),
+    url: normalizeSupabaseUrl(process.env.SUPABASE_URL),
+    anon: String(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim(),
+    service: String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim(),
   };
 }
 
 function ready() {
   const e = env();
-  return Boolean(e.url && e.anon && e.service);
+  return Boolean(e.url && e.anon && e.service && e.url.includes(".supabase.co"));
 }
 
 async function supabase(path, options = {}, service = false) {
@@ -93,7 +107,7 @@ export default async function handler(req, res) {
       return json(res, 503, {
         ok: false,
         code: "DATA_NOT_CONFIGURED",
-        error: "Penyimpanan aman belum aktif. Tambahkan SUPABASE_URL, SUPABASE_ANON_KEY, dan SUPABASE_SERVICE_ROLE_KEY di Vercel.",
+        error: "Penyimpanan aman belum aktif. Pastikan SUPABASE_URL berbentuk https://PROJECT-REF.supabase.co dan key Supabase sudah diisi di Vercel.",
       });
     }
 
@@ -108,11 +122,7 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
       const payload = safePayload(body.payload);
-      const row = {
-        user_id: user.id,
-        payload,
-        updated_at: new Date().toISOString(),
-      };
+      const row = { user_id: user.id, payload, updated_at: new Date().toISOString() };
       const rows = await supabase(`/rest/v1/${TABLE}?on_conflict=user_id`, {
         method: "POST",
         body: JSON.stringify(row),
