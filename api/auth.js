@@ -23,16 +23,30 @@ function cookie(value, maxAge = MAX_AGE) {
   return `${COOKIE}=${encodeURIComponent(value || "")}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
 }
 
+function normalizeSupabaseUrl(raw) {
+  const value = String(raw || "").trim().replace(/\/$/, "");
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    const project = url.pathname.match(/\/project\/([a-z0-9]{10,})/i)?.[1];
+    if (url.hostname === "supabase.com" && project) return `https://${project}.supabase.co`;
+    if (url.hostname.endsWith(".supabase.co")) return url.origin;
+    return value;
+  } catch {
+    return value;
+  }
+}
+
 function env() {
   return {
-    url: String(process.env.SUPABASE_URL || "").replace(/\/$/, ""),
-    key: String(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || ""),
+    url: normalizeSupabaseUrl(process.env.SUPABASE_URL),
+    key: String(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim(),
   };
 }
 
 function authReady() {
   const e = env();
-  return Boolean(e.url && e.key);
+  return Boolean(e.url && e.key && e.url.includes(".supabase.co"));
 }
 
 async function supabase(path, options = {}) {
@@ -71,7 +85,7 @@ export default async function handler(req, res) {
       return json(res, 503, {
         ok: false,
         code: "AUTH_NOT_CONFIGURED",
-        error: "Login belum aktif. Tambahkan SUPABASE_URL dan SUPABASE_PUBLISHABLE_KEY di Vercel Environment Variables.",
+        error: "Login belum aktif. Pastikan SUPABASE_URL berbentuk https://PROJECT-REF.supabase.co dan SUPABASE_PUBLISHABLE_KEY sudah diisi di Vercel.",
       });
     }
 
