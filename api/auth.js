@@ -1,5 +1,7 @@
-const COOKIE = "deskin_session";
-const MAX_AGE = 60 * 60 * 24 * 7;
+const ACCESS_COOKIE = "deskin_session";
+const REFRESH_COOKIE = "deskin_refresh";
+const ACCESS_MAX_AGE = 60 * 60 * 24 * 7;
+const REFRESH_MAX_AGE = 60 * 60 * 24 * 30;
 
 function json(res, status, data, headers = {}) {
   Object.entries(headers).forEach(([key, value]) => res.setHeader(key, value));
@@ -18,9 +20,22 @@ function parseCookies(header = "") {
   );
 }
 
-function cookie(value, maxAge = MAX_AGE) {
+function makeCookie(name, value, maxAge) {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${COOKIE}=${encodeURIComponent(value || "")}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+  return `${name}=${encodeURIComponent(value || "")}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
+function sessionCookies(accessToken, refreshToken) {
+  const cookies = [makeCookie(ACCESS_COOKIE, accessToken, ACCESS_MAX_AGE)];
+  if (refreshToken) cookies.push(makeCookie(REFRESH_COOKIE, refreshToken, REFRESH_MAX_AGE));
+  return cookies;
+}
+
+function clearCookies() {
+  return [
+    makeCookie(ACCESS_COOKIE, "", 0),
+    makeCookie(REFRESH_COOKIE, "", 0),
+  ];
 }
 
 function normalizeSupabaseUrl(raw) {
@@ -77,6 +92,22 @@ async function getUser(accessToken) {
   });
 }
 
+async function refreshSession(refreshToken) {
+  if (!refreshToken) return null;
+  return supabase("/auth/v1/token?grant_type=refresh_token", {
+    method: "POST",
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+}
+
+function safeUser(user, fallbackEmail = "", fallbackName = "") {
+  return {
+    id: user?.id,
+    email: user?.email || fallbackEmail,
+    name: user?.user_metadata?.name || fallbackName || user?.email?.split("@")[0] || fallbackEmail.split("@")[0] || "Pengguna",
+  };
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === "OPTIONS") return json(res, 200, { ok: true });
@@ -90,19 +121,29 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "GET") {
-      const token = parseCookies(req.headers.cookie || "")[COOKIE];
-      if (!token) return json(res, 200, { ok: true, authenticated: false });
-      const user = await getUser(token).catch(() => null);
-      if (!user) return json(res, 200, { ok: true, authenticated: false }, { "Set-Cookie": cookie("", 0) });
-      return json(res, 200, {
-        ok: true,
-        authenticated: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.user_metadata?.name || user.email?.split("@")[0] || "Pengguna",
-        },
-      });
+      const cookies = parseCookies(req.headers.cookie || "");
+      const accessToken = cookies[ACCESS_COOKIE];
+      const refreshToken = cookies[REFRESH_COOKIE];
+
+      if (accessToken) {
+        const user = await getUser(accessToken).catch(() => null);
+        if (user) {
+          return json(res, 200, { ok: true, authenticated: true, user: safeUser(user) });
+        }
+      }
+
+      const refreshed = await refreshSession(refreshToken).catch(() => null);
+      if (refreshed?.access_token) {
+        const user = refreshed.user || await getUser(refreshed.access_token).catch(() => null);
+        return json(res, 200, {
+          ok: true,
+          authenticated: true,
+          refreshed: true,
+          user: safeUser(user),
+        }, { "Set-Cookie": sessionCookies(refreshed.access_token, refreshed.refresh_token || refreshToken) });
+      }
+
+      return json(res, 200, { ok: true, authenticated: false }, { "Set-Cookie": clearCookies() });
     }
 
     if (req.method !== "POST") return json(res, 405, { ok: false, error: "Method tidak didukung." });
@@ -113,7 +154,7 @@ export default async function handler(req, res) {
     const password = String(body.password || "");
     const name = String(body.name || "").trim();
 
-    if (action === "logout") return json(res, 200, { ok: true }, { "Set-Cookie": cookie("", 0) });
+    if (action === "logout") return json(res, 200, { ok: true }, { "Set-Cookie": clearCookies() });
     if (!email || !password) return json(res, 400, { ok: false, error: "Email dan password wajib diisi." });
     if (password.length < 8) return json(res, 400, { ok: false, error: "Password minimal 8 karakter." });
 
@@ -133,7 +174,9 @@ export default async function handler(req, res) {
     }
 
     const accessToken = data.access_token;
+    const refreshToken = data.refresh_token;
     const user = data.user || (accessToken ? await getUser(accessToken).catch(() => null) : null);
+
     if (!accessToken && action === "register") {
       return json(res, 200, { ok: true, needsEmailConfirmation: true, message: "Daftar berhasil. Cek email untuk konfirmasi sebelum login." });
     }
@@ -142,12 +185,8 @@ export default async function handler(req, res) {
     return json(res, 200, {
       ok: true,
       authenticated: true,
-      user: {
-        id: user?.id,
-        email: user?.email || email,
-        name: user?.user_metadata?.name || name || email.split("@")[0],
-      },
-    }, { "Set-Cookie": cookie(accessToken) });
+      user: safeUser(user, email, name),
+    }, { "Set-Cookie": sessionCookies(accessToken, refreshToken) });
   } catch (error) {
     return json(res, error.status || 500, { ok: false, error: error.message || "Auth gagal." });
   }
