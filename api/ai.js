@@ -1,9 +1,4 @@
-const DEFAULT_MODELS = [
-  process.env.GEMINI_MODEL || "gemini-2.0-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-8b"
-];
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 const SYSTEM_PROMPT = `
 Kamu adalah asisten operasional untuk Nipah Lestari.
@@ -39,12 +34,13 @@ function parseBody(req) {
 }
 
 function modelList() {
-  const extraModels = String(process.env.GEMINI_FALLBACK_MODELS || "")
+  const fromEnv = String(process.env.GEMINI_FALLBACK_MODELS || "")
     .split(",")
     .map((model) => model.trim())
     .filter(Boolean);
 
-  return [...new Set([...extraModels, ...DEFAULT_MODELS])];
+  const safeDefaults = [DEFAULT_MODEL, "gemini-2.0-flash", "gemini-1.5-flash"];
+  return [...new Set([...fromEnv, ...safeDefaults])];
 }
 
 function buildPrompt(feature, message) {
@@ -65,7 +61,11 @@ function normalizeGeminiError(message) {
   const lower = text.toLowerCase();
 
   if (lower.includes("high demand") || lower.includes("overloaded") || lower.includes("unavailable")) {
-    return "AI sedang ramai. Sistem sudah mencoba model cadangan, tetapi belum mendapat respons stabil. Coba ulang beberapa saat lagi.";
+    return "AI sedang ramai. Coba ulang beberapa saat lagi.";
+  }
+
+  if (lower.includes("not found") || lower.includes("not supported") || lower.includes("listmodels") || lower.includes("generatecontent")) {
+    return "Model AI yang dipakai belum cocok dengan API key ini. Cek GEMINI_MODEL di Vercel, atau kosongkan agar memakai gemini-2.0-flash.";
   }
 
   if (lower.includes("quota") || lower.includes("rate limit")) {
@@ -160,7 +160,7 @@ export default async function handler(req, res) {
         ok: true,
         message: "Nipah Lestari AI API aktif.",
         models: modelList(),
-        version: "2.2.0"
+        version: "2.2.1"
       });
     }
 
