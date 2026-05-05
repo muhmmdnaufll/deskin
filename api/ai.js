@@ -86,7 +86,7 @@ function looksCut(text) {
   const clean = String(text || "").trim();
   if (!clean) return true;
   if (clean.length < 120) return false;
-  return !/[.!?)]$/.test(clean) && !clean.endsWith("```"));
+  return !/[.!?)]$/.test(clean) && !clean.endsWith("```");
 }
 
 export default async function handler(req, res) {
@@ -101,7 +101,7 @@ export default async function handler(req, res) {
         ok: true,
         message: "Nipah Lestari AI API aktif.",
         model: GEMINI_MODEL,
-        version: "2.1.0"
+        version: "2.1.1"
       });
     }
 
