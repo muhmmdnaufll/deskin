@@ -510,8 +510,11 @@
 
   function getAiMessage(error) {
     const message = String(error?.message || "AI belum tersedia.");
+    if (/not found|not supported|listmodels|generatecontent|model ai/i.test(message)) {
+      return "Model AI belum cocok dengan API key yang aktif. Cek GEMINI_MODEL di Vercel, atau kosongkan agar memakai model default.";
+    }
     if (/high demand|overloaded|try again|ramai|stabil/i.test(message)) {
-      return "Layanan AI sedang padat. Sistem sudah mencoba model cadangan, tetapi belum mendapat respons stabil. Coba ulang sebentar lagi.";
+      return "Layanan AI sedang padat. Coba ulang sebentar lagi.";
     }
     return message;
   }
