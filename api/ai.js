@@ -15,6 +15,14 @@ Aturan jawaban:
 - Akhiri jawaban dengan kalimat yang tuntas.
 `;
 
+const KEY_NAMES = [
+  "GEMINI_API_KEY",
+  "GOOGLE_API_KEY",
+  "GOOGLE_GENERATIVE_AI_API_KEY",
+  "GENAI_API_KEY",
+  "API_KEY"
+];
+
 function sendJson(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
@@ -31,6 +39,16 @@ function parseBody(req) {
     }
   }
   return req.body;
+}
+
+function readApiKey() {
+  for (const name of KEY_NAMES) {
+    const value = String(process.env[name] || "")
+      .trim()
+      .replace(/^['\"]|['\"]$/g, "");
+    if (value) return { key: value, name };
+  }
+  return { key: "", name: "" };
 }
 
 function modelList() {
@@ -65,15 +83,15 @@ function normalizeGeminiError(message) {
   }
 
   if (lower.includes("not found") || lower.includes("not supported") || lower.includes("listmodels") || lower.includes("generatecontent")) {
-    return "Model AI yang dipakai belum cocok dengan API key ini. Cek GEMINI_MODEL di Vercel, atau kosongkan agar memakai gemini-2.0-flash.";
+    return "Model AI belum cocok dengan API key yang aktif. Cek GEMINI_MODEL di Vercel, atau kosongkan agar memakai gemini-2.0-flash.";
   }
 
   if (lower.includes("quota") || lower.includes("rate limit")) {
     return "Kuota atau batas pemakaian AI sedang tercapai. Coba lagi nanti atau cek pengaturan API key.";
   }
 
-  if (lower.includes("api key")) {
-    return "API key Gemini belum aktif atau belum sesuai. Cek Environment Variables di Vercel.";
+  if (lower.includes("api key") || lower.includes("permission") || lower.includes("unauthorized") || lower.includes("forbidden")) {
+    return "Kunci AI belum valid atau belum terbaca oleh server. Cek Environment Variables di Vercel, lalu redeploy.";
   }
 
   return text || "AI belum tersedia.";
@@ -155,12 +173,17 @@ export default async function handler(req, res) {
       return sendJson(res, 200, { ok: true });
     }
 
+    const apiKeyInfo = readApiKey();
+
     if (req.method === "GET") {
       return sendJson(res, 200, {
         ok: true,
         message: "Nipah Lestari AI API aktif.",
+        envReady: Boolean(apiKeyInfo.key),
+        envName: apiKeyInfo.name || null,
+        acceptedEnvNames: KEY_NAMES,
         models: modelList(),
-        version: "2.2.1"
+        version: "2.3.0"
       });
     }
 
@@ -168,11 +191,11 @@ export default async function handler(req, res) {
       return sendJson(res, 405, { ok: false, error: "Method tidak didukung." });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    if (!apiKeyInfo.key) {
       return sendJson(res, 500, {
         ok: false,
-        error: "GEMINI_API_KEY belum diatur di Vercel Environment Variables."
+        code: "AI_KEY_MISSING",
+        error: `Kunci AI belum terbaca oleh server. Tambahkan salah satu Environment Variable di Vercel: ${KEY_NAMES.join(", ")}, lalu redeploy.`
       });
     }
 
@@ -185,7 +208,7 @@ export default async function handler(req, res) {
     }
 
     const prompt = buildPrompt(feature, message);
-    const first = await generateWithFallback(apiKey, prompt, 4096);
+    const first = await generateWithFallback(apiKeyInfo.key, prompt, 4096);
     let answer = first.text;
     let model = first.model;
     let finishReason = first.finishReason;
@@ -200,7 +223,7 @@ ${prompt}
 Jawaban yang sudah ada:
 ${answer}
 `;
-      const continuation = await generateWithFallback(apiKey, continuationPrompt, 2048);
+      const continuation = await generateWithFallback(apiKeyInfo.key, continuationPrompt, 2048);
       if (continuation.text) {
         answer = `${answer}\n\n${continuation.text}`.trim();
         model = continuation.model;
