@@ -1,0 +1,227 @@
+.lapangan-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.lapangan-hero > section,
+.workflow-card {
+  border: 1px solid var(--nipah-line);
+  border-radius: 32px;
+  background: var(--nipah-surface);
+  box-shadow: var(--shadow);
+}
+
+.lapangan-hero > section {
+  padding: clamp(24px, 5vw, 48px);
+  background:
+    radial-gradient(circle at 84% 12%, rgba(118, 200, 147, .22), transparent 16rem),
+    linear-gradient(135deg, var(--nipah-surface), var(--nipah-soft));
+}
+
+.lapangan-hero h2 {
+  margin: 0;
+  max-width: 860px;
+  font-size: clamp(34px, 5.6vw, 64px);
+  line-height: .98;
+  letter-spacing: -.06em;
+}
+
+.lapangan-hero p {
+  max-width: 720px;
+  color: var(--nipah-muted);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.workflow-card {
+  padding: 24px;
+  display: grid;
+  align-content: space-between;
+  color: #fff;
+  background: linear-gradient(150deg, #123e2a, #2e7b4d 60%, #6fa85f);
+}
+
+.workflow-card span {
+  text-transform: uppercase;
+  letter-spacing: .16em;
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .8;
+}
+
+.workflow-card ol {
+  margin: 18px 0 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-card,
+.location-card,
+.batch-card,
+.partner-card,
+.empty-state,
+.task-row,
+.process-step {
+  border: 1px solid var(--nipah-line);
+  border-radius: 22px;
+  background: var(--nipah-surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.metric-card {
+  padding: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.metric-card strong {
+  font-size: 34px;
+  line-height: 1;
+  color: var(--nipah-dark);
+}
+
+.metric-card span {
+  font-weight: 900;
+}
+
+.metric-card small,
+.task-row p,
+.process-step p {
+  color: var(--nipah-muted);
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 18px;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-size: clamp(30px, 4vw, 48px);
+  letter-spacing: -.04em;
+}
+
+.location-list,
+.partner-list {
+  display: grid;
+  gap: 12px;
+}
+
+.location-card,
+.partner-card,
+.empty-state {
+  padding: 18px;
+}
+
+.location-card h3,
+.partner-card h3,
+.batch-card h3,
+.task-row h3,
+.process-step h3 {
+  margin: 0;
+}
+
+.task-row {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.task-row span {
+  width: 12px;
+  height: 12px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--nipah-green);
+}
+
+.batch-board,
+.impact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.batch-card {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.batch-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.batch-card dt {
+  color: var(--nipah-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.batch-card dd {
+  margin: 2px 0 0;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.process-line {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.process-step {
+  padding: 16px;
+}
+
+.process-step span {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  color: #fff;
+  background: var(--nipah-green);
+  font-weight: 900;
+}
+
+@media (max-width: 1120px) {
+  .lapangan-hero,
+  .process-line {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .metrics-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .section-head {
+    display: grid;
+  }
+}

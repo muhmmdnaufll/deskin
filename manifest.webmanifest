@@ -1,7 +1,7 @@
 {
-  "name": "Nipah Lestari - Energi Baik Pesisir",
+  "name": "Nipah Lestari - Portal Aksi Pesisir",
   "short_name": "Nipah Lestari",
-  "description": "Prototype website aksi edukasi, dokumentasi, dan kolaborasi untuk potensi nipah Aceh Singkil.",
+  "description": "Portal lapangan untuk inventaris lokasi nipah, dokumentasi, batch nira, dampak, dan mitra program pesisir.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f4f8ef",
