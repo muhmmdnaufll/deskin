@@ -1,12 +1,12 @@
 {
   "name": "nipah-lestari",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
-  "description": "Static PWA prototype for Nipah Lestari, an education and collaboration website for coastal nipa palm action.",
+  "description": "Operational portal for Nipah Lestari field data, nipa sap batches, AI assistance, and partners.",
   "scripts": {
     "serve": "python3 -m http.server 8080",
-    "check": "node --check flow-ui.js && node --check api/ai.js"
+    "check": "node --check assets/operasi.js && node --check api/ai.js"
   },
   "dependencies": {},
   "devDependencies": {}
