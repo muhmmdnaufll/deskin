@@ -1,16 +1,18 @@
 const GEMINI_MODEL = "gemini-2.5-flash";
 
 const SYSTEM_PROMPT = `
-Kamu adalah assistant untuk website Nipah Lestari.
-Tugasmu membantu menjelaskan potensi nipah Aceh Singkil, aksi edukasi pesisir,
-hilirisasi nira nipah menjadi Biostimulan Cair Nipah, dan ide kolaborasi masyarakat.
+Kamu adalah asisten operasional untuk Nipah Lestari.
+Nipah Lestari dipakai oleh pendamping lapangan, BUMDes, penyadap, petani,
+komunitas, dan pemerintah desa untuk mengelola data lokasi nipah, catatan
+lapangan, mutu nira, batch Biostimulan Cair Nipah, dampak, dan mitra.
 
-Aturan:
+Aturan jawaban:
 - Jawab dalam bahasa Indonesia.
-- Jangan membuat klaim hasil uji yang belum dilakukan.
-- Bedakan data observasi awal, rencana, dan target pengembangan.
-- Gunakan gaya praktis, hangat, dan mudah dipahami.
-- Jika membahas produk pertanian, tekankan bahwa tahap awal adalah prototipe/uji terbatas.
+- Jangan membuat klaim hasil uji yang belum ada datanya.
+- Bedakan data tercatat, asumsi, dan rekomendasi.
+- Gunakan bahasa praktis untuk kerja lapangan.
+- Jangan terlalu pendek jika pengguna meminta laporan, analisis, atau rencana.
+- Akhiri jawaban dengan kalimat yang tuntas.
 `;
 
 function sendJson(res, status, payload) {
@@ -37,14 +39,54 @@ ${SYSTEM_PROMPT}
 
 Konteks fitur: ${feature || "Nipah Lestari"}
 
-Permintaan pengguna:
+Permintaan/data pengguna:
 ${message}
 
-Susun jawaban dengan format:
-1. Ringkasan
-2. Langkah praktis
-3. Catatan kehati-hatian
+Formatkan jawaban dengan struktur yang rapi. Jika data belum cukup, jelaskan bagian yang perlu dilengkapi tanpa mengarang.
 `;
+}
+
+async function callGemini(apiKey, prompt, maxOutputTokens = 4096) {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey
+      },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.45,
+          topP: 0.9,
+          maxOutputTokens
+        }
+      })
+    }
+  );
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload?.error?.message || "Gagal menghubungi Gemini API.");
+    error.status = response.status;
+    throw error;
+  }
+
+  const candidate = payload?.candidates?.[0] || {};
+  const text = candidate?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim() || "";
+
+  return { text, finishReason: candidate.finishReason || "UNKNOWN" };
+}
+
+function looksCut(text) {
+  const clean = String(text || "").trim();
+  if (!clean) return true;
+  if (clean.length < 120) return false;
+  return !/[.!?)]$/.test(clean) && !clean.endsWith("```");
 }
 
 export default async function handler(req, res) {
@@ -59,7 +101,7 @@ export default async function handler(req, res) {
         ok: true,
         message: "Nipah Lestari AI API aktif.",
         model: GEMINI_MODEL,
-        version: "2.0.0"
+        version: "2.1.1"
       });
     }
 
@@ -83,41 +125,38 @@ export default async function handler(req, res) {
       return sendJson(res, 400, { ok: false, error: "Pesan kosong." });
     }
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey
-        },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: buildPrompt(feature, message) }] }],
-          generationConfig: {
-            temperature: 0.5,
-            topP: 0.9,
-            maxOutputTokens: 1400
-          }
-        })
-      }
-    );
+    const prompt = buildPrompt(feature, message);
+    const first = await callGemini(apiKey, prompt, 4096);
+    let answer = first.text;
+    let finishReason = first.finishReason;
 
-    const geminiPayload = await geminiResponse.json().catch(() => ({}));
-    if (!geminiResponse.ok) {
-      return sendJson(res, geminiResponse.status, {
-        ok: false,
-        error: geminiPayload?.error?.message || "Gagal menghubungi Gemini API."
-      });
+    if (finishReason === "MAX_TOKENS" || looksCut(answer)) {
+      const continuationPrompt = `
+Lanjutkan jawaban berikut sampai tuntas. Jangan ulangi bagian yang sudah ada.
+
+Permintaan awal:
+${prompt}
+
+Jawaban yang sudah ada:
+${answer}
+`;
+      const continuation = await callGemini(apiKey, continuationPrompt, 2048);
+      if (continuation.text) {
+        answer = `${answer}\n\n${continuation.text}`.trim();
+        finishReason = continuation.finishReason;
+      }
     }
 
-    const answer = geminiPayload?.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text || "")
-      .join("")
-      .trim() || "AI belum memberi jawaban.";
+    if (!answer) answer = "AI belum memberi jawaban.";
 
-    return sendJson(res, 200, { ok: true, model: GEMINI_MODEL, answer });
+    return sendJson(res, 200, {
+      ok: true,
+      model: GEMINI_MODEL,
+      finishReason,
+      answer
+    });
   } catch (error) {
-    return sendJson(res, 500, {
+    return sendJson(res, error.status || 500, {
       ok: false,
       error: error?.message || "Terjadi kesalahan server."
     });
