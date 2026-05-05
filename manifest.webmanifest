@@ -1,12 +1,12 @@
 {
-  "name": "DeSkin - Digital Skin Assistant",
-  "short_name": "DeSkin",
-  "description": "Aplikasi skincare berbasis AI untuk analisis kulit, edukasi, konsultasi, market, dan tracking.",
-  "start_url": "/#/dashboard",
+  "name": "Nipah Lestari - Energi Baik Pesisir",
+  "short_name": "Nipah Lestari",
+  "description": "Prototype website aksi edukasi, dokumentasi, dan kolaborasi untuk potensi nipah Aceh Singkil.",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#f6f9fc",
-  "theme_color": "#063b75",
+  "background_color": "#f4f8ef",
+  "theme_color": "#1f6b46",
   "icons": [
-    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }
