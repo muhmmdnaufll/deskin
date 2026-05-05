@@ -1,4 +1,5 @@
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"];
 
 const SYSTEM_PROMPT = `
 Kamu adalah asisten operasional untuk Nipah Lestari.
@@ -14,14 +15,6 @@ Aturan jawaban:
 - Jangan terlalu pendek jika pengguna meminta laporan, analisis, atau rencana.
 - Akhiri jawaban dengan kalimat yang tuntas.
 `;
-
-const KEY_NAMES = [
-  "GEMINI_API_KEY",
-  "GOOGLE_API_KEY",
-  "GOOGLE_GENERATIVE_AI_API_KEY",
-  "GENAI_API_KEY",
-  "API_KEY"
-];
 
 function sendJson(res, status, payload) {
   res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -41,24 +34,14 @@ function parseBody(req) {
   return req.body;
 }
 
-function readApiKey() {
-  for (const name of KEY_NAMES) {
-    const value = String(process.env[name] || "")
-      .trim()
-      .replace(/^['\"]|['\"]$/g, "");
-    if (value) return { key: value, name };
-  }
-  return { key: "", name: "" };
+function readGeminiKey() {
+  return String(process.env.GEMINI_API_KEY || "")
+    .trim()
+    .replace(/^['\"]|['\"]$/g, "");
 }
 
 function modelList() {
-  const fromEnv = String(process.env.GEMINI_FALLBACK_MODELS || "")
-    .split(",")
-    .map((model) => model.trim())
-    .filter(Boolean);
-
-  const safeDefaults = [DEFAULT_MODEL, "gemini-2.0-flash", "gemini-1.5-flash"];
-  return [...new Set([...fromEnv, ...safeDefaults])];
+  return [...new Set([GEMINI_MODEL, ...FALLBACK_MODELS].filter(Boolean))];
 }
 
 function buildPrompt(feature, message) {
@@ -83,7 +66,7 @@ function normalizeGeminiError(message) {
   }
 
   if (lower.includes("not found") || lower.includes("not supported") || lower.includes("listmodels") || lower.includes("generatecontent")) {
-    return "Model AI belum cocok dengan API key yang aktif. Cek GEMINI_MODEL di Vercel, atau kosongkan agar memakai gemini-2.0-flash.";
+    return "Model AI belum cocok. Kosongkan GEMINI_MODEL di Vercel agar memakai gemini-2.0-flash, lalu redeploy.";
   }
 
   if (lower.includes("quota") || lower.includes("rate limit")) {
@@ -91,7 +74,7 @@ function normalizeGeminiError(message) {
   }
 
   if (lower.includes("api key") || lower.includes("permission") || lower.includes("unauthorized") || lower.includes("forbidden")) {
-    return "Kunci AI belum valid atau belum terbaca oleh server. Cek Environment Variables di Vercel, lalu redeploy.";
+    return "GEMINI_API_KEY belum valid atau belum terbaca oleh runtime Vercel. Pastikan variabel tersedia untuk Production/Preview, lalu redeploy.";
   }
 
   return text || "AI belum tersedia.";
@@ -166,6 +149,15 @@ function looksCut(text) {
   return !/[.!?)]$/.test(clean) && !clean.endsWith("```");
 }
 
+async function runHealthCheck(apiKey) {
+  const result = await generateWithFallback(apiKey, "Jawab tepat satu kata: OK", 32);
+  return {
+    ok: true,
+    model: result.model,
+    answer: result.text
+  };
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === "OPTIONS") {
@@ -173,17 +165,30 @@ export default async function handler(req, res) {
       return sendJson(res, 200, { ok: true });
     }
 
-    const apiKeyInfo = readApiKey();
+    const apiKey = readGeminiKey();
 
     if (req.method === "GET") {
+      const test = String(req.query?.test || "") === "1";
+      if (test && apiKey) {
+        const health = await runHealthCheck(apiKey);
+        return sendJson(res, 200, {
+          ok: true,
+          envReady: true,
+          envName: "GEMINI_API_KEY",
+          test: health,
+          models: modelList(),
+          version: "2.4.1"
+        });
+      }
+
       return sendJson(res, 200, {
         ok: true,
         message: "Nipah Lestari AI API aktif.",
-        envReady: Boolean(apiKeyInfo.key),
-        envName: apiKeyInfo.name || null,
-        acceptedEnvNames: KEY_NAMES,
+        envReady: Boolean(apiKey),
+        envName: apiKey ? "GEMINI_API_KEY" : null,
+        testUrl: "/api/ai?test=1",
         models: modelList(),
-        version: "2.3.0"
+        version: "2.4.1"
       });
     }
 
@@ -191,11 +196,11 @@ export default async function handler(req, res) {
       return sendJson(res, 405, { ok: false, error: "Method tidak didukung." });
     }
 
-    if (!apiKeyInfo.key) {
+    if (!apiKey) {
       return sendJson(res, 500, {
         ok: false,
         code: "AI_KEY_MISSING",
-        error: `Kunci AI belum terbaca oleh server. Tambahkan salah satu Environment Variable di Vercel: ${KEY_NAMES.join(", ")}, lalu redeploy.`
+        error: "GEMINI_API_KEY tidak terbaca oleh runtime Vercel. Pastikan variabel tersedia untuk Production/Preview dan lakukan redeploy."
       });
     }
 
@@ -208,7 +213,7 @@ export default async function handler(req, res) {
     }
 
     const prompt = buildPrompt(feature, message);
-    const first = await generateWithFallback(apiKeyInfo.key, prompt, 4096);
+    const first = await generateWithFallback(apiKey, prompt, 4096);
     let answer = first.text;
     let model = first.model;
     let finishReason = first.finishReason;
@@ -223,7 +228,7 @@ ${prompt}
 Jawaban yang sudah ada:
 ${answer}
 `;
-      const continuation = await generateWithFallback(apiKeyInfo.key, continuationPrompt, 2048);
+      const continuation = await generateWithFallback(apiKey, continuationPrompt, 2048);
       if (continuation.text) {
         answer = `${answer}\n\n${continuation.text}`.trim();
         model = continuation.model;
