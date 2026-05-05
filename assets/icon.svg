@@ -1,12 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
-  <title>DeSkin</title>
+  <title>Nipah Lestari</title>
   <defs>
-    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-      <stop stop-color="#063b75"/>
-      <stop offset="1" stop-color="#0ea5e9"/>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#12482f"/>
+      <stop offset="1" stop-color="#76c893"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#f1ffd9"/>
+      <stop offset="1" stop-color="#b7e88c"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="28" fill="url(#g)"/>
-  <path d="M35 22h34c24 0 40 16 40 42S93 106 69 106H35V22Zm22 20v44h12c12 0 20-8 20-22S81 42 69 42H57Z" fill="#fff"/>
-  <circle cx="42" cy="34" r="8" fill="#f8d84a"/>
+  <rect width="128" height="128" rx="30" fill="url(#bg)"/>
+  <path d="M70 22c-23 8-39 27-39 51 0 22 15 35 34 35 22 0 36-18 36-43 0-17-9-33-31-43Z" fill="url(#leaf)"/>
+  <path d="M43 88c20-20 35-37 45-54" fill="none" stroke="#1f6b46" stroke-width="7" stroke-linecap="round"/>
+  <path d="M56 74c10 0 19 2 27 7M62 59c9-1 17 0 25 3" fill="none" stroke="#1f6b46" stroke-width="5" stroke-linecap="round" opacity=".75"/>
 </svg>
