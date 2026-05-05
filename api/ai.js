@@ -1,4 +1,5 @@
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"];
 
 const SYSTEM_PROMPT = `
 Kamu adalah asisten operasional untuk Nipah Lestari.
@@ -33,14 +34,14 @@ function parseBody(req) {
   return req.body;
 }
 
-function modelList() {
-  const fromEnv = String(process.env.GEMINI_FALLBACK_MODELS || "")
-    .split(",")
-    .map((model) => model.trim())
-    .filter(Boolean);
+function readGeminiKey() {
+  return String(process.env.GEMINI_API_KEY || "")
+    .trim()
+    .replace(/^['\"]|['\"]$/g, "");
+}
 
-  const safeDefaults = [DEFAULT_MODEL, "gemini-2.0-flash", "gemini-1.5-flash"];
-  return [...new Set([...fromEnv, ...safeDefaults])];
+function modelList() {
+  return [...new Set([GEMINI_MODEL, ...FALLBACK_MODELS].filter(Boolean))];
 }
 
 function buildPrompt(feature, message) {
@@ -65,15 +66,15 @@ function normalizeGeminiError(message) {
   }
 
   if (lower.includes("not found") || lower.includes("not supported") || lower.includes("listmodels") || lower.includes("generatecontent")) {
-    return "Model AI yang dipakai belum cocok dengan API key ini. Cek GEMINI_MODEL di Vercel, atau kosongkan agar memakai gemini-2.0-flash.";
+    return "Model AI belum cocok. Kosongkan GEMINI_MODEL di Vercel agar memakai gemini-2.0-flash, lalu redeploy.";
   }
 
   if (lower.includes("quota") || lower.includes("rate limit")) {
     return "Kuota atau batas pemakaian AI sedang tercapai. Coba lagi nanti atau cek pengaturan API key.";
   }
 
-  if (lower.includes("api key")) {
-    return "API key Gemini belum aktif atau belum sesuai. Cek Environment Variables di Vercel.";
+  if (lower.includes("api key") || lower.includes("permission") || lower.includes("unauthorized") || lower.includes("forbidden")) {
+    return "GEMINI_API_KEY belum valid atau belum terbaca oleh runtime Vercel. Pastikan variabel tersedia untuk Production/Preview, lalu redeploy.";
   }
 
   return text || "AI belum tersedia.";
@@ -148,6 +149,15 @@ function looksCut(text) {
   return !/[.!?)]$/.test(clean) && !clean.endsWith("```");
 }
 
+async function runHealthCheck(apiKey) {
+  const result = await generateWithFallback(apiKey, "Jawab tepat satu kata: OK", 32);
+  return {
+    ok: true,
+    model: result.model,
+    answer: result.text
+  };
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === "OPTIONS") {
@@ -155,12 +165,30 @@ export default async function handler(req, res) {
       return sendJson(res, 200, { ok: true });
     }
 
+    const apiKey = readGeminiKey();
+
     if (req.method === "GET") {
+      const test = String(req.query?.test || "") === "1";
+      if (test && apiKey) {
+        const health = await runHealthCheck(apiKey);
+        return sendJson(res, 200, {
+          ok: true,
+          envReady: true,
+          envName: "GEMINI_API_KEY",
+          test: health,
+          models: modelList(),
+          version: "2.4.0"
+        });
+      }
+
       return sendJson(res, 200, {
         ok: true,
         message: "Nipah Lestari AI API aktif.",
+        envReady: Boolean(apiKey),
+        envName: apiKey ? "GEMINI_API_KEY" : null,
+        testUrl: "/api/ai?test=1",
         models: modelList(),
-        version: "2.2.1"
+        version: "2.4.0"
       });
     }
 
@@ -168,11 +196,11 @@ export default async function handler(req, res) {
       return sendJson(res, 405, { ok: false, error: "Method tidak didukung." });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return sendJson(res, 500, {
         ok: false,
-        error: "GEMINI_API_KEY belum diatur di Vercel Environment Variables."
+        code: "AI_KEY_MISSING",
+        error: "GEMINI_API_KEY tidak terbaca oleh runtime Vercel. Pastikan variabel tersedia untuk Production/Preview dan lakukan redeploy."
       });
     }
 
