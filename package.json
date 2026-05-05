@@ -1,12 +1,12 @@
 {
-  "name": "deskin-deploy-ready",
-  "version": "1.0.6",
+  "name": "nipah-lestari",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Lightweight deploy-ready static PWA for DeSkin UI/UX.",
+  "description": "Static PWA prototype for Nipah Lestari, an education and collaboration website for coastal nipa palm action.",
   "scripts": {
     "serve": "python3 -m http.server 8080",
-    "check": "node --check app-fixed.js && node --check enhance-v106.js && node --check api/ai.js"
+    "check": "node --check flow-ui.js && node --check api/ai.js"
   },
   "dependencies": {},
   "devDependencies": {}
