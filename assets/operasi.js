@@ -502,8 +502,18 @@
       if (!aiResponse.ok || !aiPayload.ok) throw new Error(aiPayload.error || "AI belum tersedia.");
       $(".modal-body").innerHTML = `<h2>Saran Operasional</h2><div class="ai-result">${escapeText(aiPayload.answer).replace(/\n/g, "<br>")}</div>`;
     } catch (error) {
-      $(".modal-body").innerHTML = `<h2>Saran Operasional</h2><p class="muted">${escapeText(error.message || "AI belum tersedia.")}</p>`;
+      const friendlyMessage = getAiMessage(error);
+      $(".modal-body").innerHTML = `<h2>Saran Operasional</h2><div class="ai-error"><strong>AI belum bisa menjawab sekarang.</strong><p>${escapeText(friendlyMessage)}</p><button class="secondary-btn" type="button" data-retry-ai="${kind}">Coba lagi</button></div>`;
+      $("[data-retry-ai]")?.addEventListener("click", () => askGemini(kind));
     }
+  }
+
+  function getAiMessage(error) {
+    const message = String(error?.message || "AI belum tersedia.");
+    if (/high demand|overloaded|try again|ramai|stabil/i.test(message)) {
+      return "Layanan AI sedang padat. Sistem sudah mencoba model cadangan, tetapi belum mendapat respons stabil. Coba ulang sebentar lagi.";
+    }
+    return message;
   }
 
   function buildAiPrompt(kind) {

@@ -1,4 +1,9 @@
-const GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODELS = [
+  process.env.GEMINI_MODEL || "gemini-2.0-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b"
+];
 
 const SYSTEM_PROMPT = `
 Kamu adalah asisten operasional untuk Nipah Lestari.
@@ -33,6 +38,15 @@ function parseBody(req) {
   return req.body;
 }
 
+function modelList() {
+  const extraModels = String(process.env.GEMINI_FALLBACK_MODELS || "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+
+  return [...new Set([...extraModels, ...DEFAULT_MODELS])];
+}
+
 function buildPrompt(feature, message) {
   return `
 ${SYSTEM_PROMPT}
@@ -46,9 +60,32 @@ Formatkan jawaban dengan struktur yang rapi. Jika data belum cukup, jelaskan bag
 `;
 }
 
-async function callGemini(apiKey, prompt, maxOutputTokens = 4096) {
+function normalizeGeminiError(message) {
+  const text = String(message || "");
+  const lower = text.toLowerCase();
+
+  if (lower.includes("high demand") || lower.includes("overloaded") || lower.includes("unavailable")) {
+    return "AI sedang ramai. Sistem sudah mencoba model cadangan, tetapi belum mendapat respons stabil. Coba ulang beberapa saat lagi.";
+  }
+
+  if (lower.includes("quota") || lower.includes("rate limit")) {
+    return "Kuota atau batas pemakaian AI sedang tercapai. Coba lagi nanti atau cek pengaturan API key.";
+  }
+
+  if (lower.includes("api key")) {
+    return "API key Gemini belum aktif atau belum sesuai. Cek Environment Variables di Vercel.";
+  }
+
+  return text || "AI belum tersedia.";
+}
+
+async function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callGemini(apiKey, model, prompt, maxOutputTokens = 4096) {
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
       headers: {
@@ -58,7 +95,7 @@ async function callGemini(apiKey, prompt, maxOutputTokens = 4096) {
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.45,
+          temperature: 0.42,
           topP: 0.9,
           maxOutputTokens
         }
@@ -70,6 +107,7 @@ async function callGemini(apiKey, prompt, maxOutputTokens = 4096) {
   if (!response.ok) {
     const error = new Error(payload?.error?.message || "Gagal menghubungi Gemini API.");
     error.status = response.status;
+    error.model = model;
     throw error;
   }
 
@@ -79,7 +117,28 @@ async function callGemini(apiKey, prompt, maxOutputTokens = 4096) {
     .join("")
     .trim() || "";
 
-  return { text, finishReason: candidate.finishReason || "UNKNOWN" };
+  return { text, model, finishReason: candidate.finishReason || "UNKNOWN" };
+}
+
+async function generateWithFallback(apiKey, prompt, maxOutputTokens) {
+  let lastError;
+
+  for (const model of modelList()) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await callGemini(apiKey, model, prompt, maxOutputTokens);
+      } catch (error) {
+        lastError = error;
+        const retryable = [429, 500, 502, 503, 504].includes(Number(error.status));
+        if (!retryable) break;
+        await wait(350 + attempt * 450);
+      }
+    }
+  }
+
+  const finalError = new Error(normalizeGeminiError(lastError?.message));
+  finalError.status = lastError?.status || 503;
+  throw finalError;
 }
 
 function looksCut(text) {
@@ -100,8 +159,8 @@ export default async function handler(req, res) {
       return sendJson(res, 200, {
         ok: true,
         message: "Nipah Lestari AI API aktif.",
-        model: GEMINI_MODEL,
-        version: "2.1.1"
+        models: modelList(),
+        version: "2.2.0"
       });
     }
 
@@ -126,8 +185,9 @@ export default async function handler(req, res) {
     }
 
     const prompt = buildPrompt(feature, message);
-    const first = await callGemini(apiKey, prompt, 4096);
+    const first = await generateWithFallback(apiKey, prompt, 4096);
     let answer = first.text;
+    let model = first.model;
     let finishReason = first.finishReason;
 
     if (finishReason === "MAX_TOKENS" || looksCut(answer)) {
@@ -140,25 +200,24 @@ ${prompt}
 Jawaban yang sudah ada:
 ${answer}
 `;
-      const continuation = await callGemini(apiKey, continuationPrompt, 2048);
+      const continuation = await generateWithFallback(apiKey, continuationPrompt, 2048);
       if (continuation.text) {
         answer = `${answer}\n\n${continuation.text}`.trim();
+        model = continuation.model;
         finishReason = continuation.finishReason;
       }
     }
 
-    if (!answer) answer = "AI belum memberi jawaban.";
-
     return sendJson(res, 200, {
       ok: true,
-      model: GEMINI_MODEL,
+      model,
       finishReason,
-      answer
+      answer: answer || "AI belum memberi jawaban."
     });
   } catch (error) {
     return sendJson(res, error.status || 500, {
       ok: false,
-      error: error?.message || "Terjadi kesalahan server."
+      error: normalizeGeminiError(error?.message)
     });
   }
 }
