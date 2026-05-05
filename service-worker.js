@@ -1,8 +1,6 @@
-const CACHE_NAME = "deskin-cache-v1-2-0";
+const CACHE_NAME = "nipah-lestari-v2";
 
-self.addEventListener("install", (event) => {
-  self.skipWaiting();
-});
+self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
