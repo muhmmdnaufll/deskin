@@ -1,1 +1,297 @@
-body{background:#f7f7f3}.site-footer{margin:0 24px 26px 300px;padding:14px 0 0;color:#758173;border-top:1px solid rgba(23,59,42,.1);font-size:13px}.ops-hero-copy,.ops-workflow,.ops-panel,.ops-map-card,.metric-card{border-radius:18px;box-shadow:0 1px 2px rgba(18,38,25,.04),0 10px 28px rgba(18,38,25,.04)}.ops-hero-copy{background:#fff;padding:28px}.ops-workflow{background:#eef3e7;color:#173b2a}.quick-actions{grid-template-columns:1fr}.ai-result{max-height:min(64vh,680px);overflow:auto;line-height:1.75}.field-map{min-height:360px}@media(max-width:1120px){.site-footer{margin-left:24px}}
+body {
+  background:
+    linear-gradient(90deg, rgba(23, 59, 42, .035) 1px, transparent 1px),
+    linear-gradient(rgba(23, 59, 42, .03) 1px, transparent 1px),
+    #f7f7f3;
+  background-size: 42px 42px;
+}
+
+.sidebar {
+  background:
+    radial-gradient(circle at 24px 24px, rgba(255,255,255,.10), transparent 20px),
+    linear-gradient(180deg, #123826, #173b2a 58%, #214c35);
+}
+
+.brand-mark,
+.nav a,
+.icon-btn,
+.primary-btn,
+.secondary-btn,
+.ghost-btn,
+.danger-btn {
+  border-radius: 10px;
+}
+
+.topbar {
+  border-bottom: 1px solid rgba(23, 59, 42, .1);
+  background: rgba(247, 247, 243, .92);
+  backdrop-filter: blur(16px);
+}
+
+.app {
+  padding-bottom: 22px;
+}
+
+.ops-layout,
+.container.stack {
+  max-width: 1180px;
+}
+
+.ops-hero-panel {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+}
+
+.ops-hero-panel::before {
+  content: "";
+  position: absolute;
+  right: 318px;
+  top: -10px;
+  width: 92px;
+  height: 92px;
+  border: 1px solid rgba(31, 107, 70, .22);
+  border-radius: 50% 50% 50% 12px;
+  transform: rotate(-18deg);
+  background: rgba(118, 200, 147, .10);
+  animation: leafDrift 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.ops-hero-copy,
+.ops-workflow,
+.ops-panel,
+.ops-map-card,
+.metric-card,
+.location-card,
+.batch-card,
+.partner-card,
+.empty-state,
+.process-step,
+.impact-card,
+.note-card,
+.photo-card,
+.account-card {
+  border-color: rgba(23, 59, 42, .12);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(18, 38, 25, .04), 0 12px 30px rgba(18, 38, 25, .045);
+}
+
+.ops-hero-copy {
+  position: relative;
+  overflow: hidden;
+  padding: 30px 32px;
+  border-radius: 8px 8px 8px 28px;
+  background: #fff;
+}
+
+.ops-hero-copy::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 44%;
+  height: 6px;
+  background: linear-gradient(90deg, transparent, #1f6b46, #76c893);
+}
+
+.ops-hero-copy h2 {
+  max-width: 720px;
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.04;
+  letter-spacing: -.045em;
+}
+
+.ops-hero-copy p {
+  max-width: 640px;
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.ops-workflow {
+  padding: 18px;
+  color: #173b2a;
+  border-radius: 28px 8px 8px 8px;
+  background:
+    linear-gradient(135deg, rgba(118, 200, 147, .18), transparent 52%),
+    #eef3e7;
+}
+
+.ops-workflow strong {
+  color: #5f725e;
+}
+
+.ops-workflow span {
+  padding: 11px 0;
+  border-top: 1px solid rgba(23, 59, 42, .12);
+  font-size: 15px;
+}
+
+.ops-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metric-card {
+  position: relative;
+  padding: 15px 16px;
+  background: #fff;
+}
+
+.metric-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  background: #1f6b46;
+}
+
+.metric-card strong {
+  font-size: 28px;
+}
+
+.metric-card span {
+  font-size: 14px;
+}
+
+.ops-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr);
+}
+
+.ops-panel,
+.ops-map-card {
+  background: #fff;
+}
+
+.ops-panel h2,
+.ops-map-card h2,
+.section-head h2 {
+  letter-spacing: -.035em;
+}
+
+.quick-actions {
+  grid-template-columns: 1fr;
+}
+
+.quick-actions .secondary-btn,
+.batch-toolbar .secondary-btn,
+.upload-button,
+.upload-trigger {
+  justify-content: flex-start;
+  min-height: 42px;
+  border-radius: 8px;
+  background: #f6f8f3;
+}
+
+.field-map {
+  min-height: 360px;
+  border-radius: 8px 8px 8px 24px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.48) 1px, transparent 1px),
+    linear-gradient(rgba(255,255,255,.48) 1px, transparent 1px),
+    radial-gradient(circle at 70% 22%, rgba(118, 200, 147, .28), transparent 9rem),
+    linear-gradient(145deg, #dceada, #edf4e9);
+  background-size: 38px 38px, 38px 38px, auto, auto;
+}
+
+.map-pin small {
+  border: 1px solid rgba(23, 59, 42, .12);
+  background: #fff;
+}
+
+.location-card,
+.partner-card,
+.note-card,
+.batch-card,
+.impact-card {
+  position: relative;
+  background: #fff;
+}
+
+.location-card::after,
+.partner-card::after,
+.batch-card::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 22px;
+  height: 22px;
+  border-top: 2px solid rgba(31, 107, 70, .22);
+  border-right: 2px solid rgba(31, 107, 70, .22);
+}
+
+.location-card h3,
+.partner-card h3,
+.note-card h3,
+.batch-card h3,
+.impact-card h3 {
+  margin-top: 8px;
+}
+
+.batch-board,
+.impact-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.process-line {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-top: 4px;
+}
+
+.process-step {
+  border-radius: 8px 8px 20px 8px;
+}
+
+.process-step span {
+  border-radius: 8px;
+}
+
+.auth-tabs .active {
+  background: #173b2a;
+}
+
+.ai-result {
+  max-height: min(64vh, 680px);
+  overflow: auto;
+  padding: 2px;
+  line-height: 1.75;
+}
+
+.site-footer {
+  margin: 0 24px 26px 300px;
+  padding: 14px 0 0;
+  color: #758173;
+  border-top: 1px solid rgba(23, 59, 42, .1);
+  font-size: 13px;
+}
+
+@keyframes leafDrift {
+  0%, 100% { transform: translateY(0) rotate(-18deg); opacity: .78; }
+  50% { transform: translateY(10px) rotate(-12deg); opacity: .48; }
+}
+
+@media (max-width: 1120px) {
+  .ops-hero-panel,
+  .ops-grid,
+  .process-line {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-hero-panel::before {
+    display: none;
+  }
+
+  .site-footer {
+    margin-left: 24px;
+  }
+}
+
+@media (max-width: 720px) {
+  .ops-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
