@@ -60,27 +60,34 @@ Formatkan jawaban dengan struktur yang rapi. Jika data belum cukup, jelaskan bag
 `;
 }
 
+function errorCode(message) {
+  const text = String(message || "").toLowerCase();
+  if (text.includes("denied access") || text.includes("please contact support")) return "PROJECT_ACCESS_DENIED";
+  if (text.includes("api key") || text.includes("permission") || text.includes("unauthorized") || text.includes("forbidden")) return "INVALID_KEY_OR_PERMISSION";
+  if (text.includes("quota") || text.includes("rate limit")) return "QUOTA_OR_RATE_LIMIT";
+  if (text.includes("high demand") || text.includes("overloaded") || text.includes("unavailable")) return "PROVIDER_BUSY";
+  if (text.includes("not found") || text.includes("not supported") || text.includes("listmodels") || text.includes("generatecontent")) return "MODEL_NOT_SUPPORTED";
+  return "AI_PROVIDER_ERROR";
+}
+
 function normalizeGeminiError(message) {
-  const text = String(message || "");
-  const lower = text.toLowerCase();
-
-  if (lower.includes("high demand") || lower.includes("overloaded") || lower.includes("unavailable")) {
-    return "AI sedang ramai. Coba ulang beberapa saat lagi.";
+  const code = errorCode(message);
+  if (code === "PROJECT_ACCESS_DENIED") {
+    return "Project Google yang dipakai GEMINI_API_KEY ditolak aksesnya oleh Google. Kode sudah membaca key, tetapi project/key tersebut tidak diizinkan memakai Gemini API. Buat API key baru dari project Google AI Studio yang berbeda, pasang sebagai GEMINI_API_KEY di Vercel, lalu redeploy.";
   }
-
-  if (lower.includes("quota") || lower.includes("rate limit")) {
+  if (code === "INVALID_KEY_OR_PERMISSION") {
+    return "GEMINI_API_KEY belum valid atau permission Gemini API belum aktif. Cek kembali API key di Vercel lalu redeploy.";
+  }
+  if (code === "QUOTA_OR_RATE_LIMIT") {
     return "Kuota atau batas pemakaian AI sedang tercapai. Coba lagi nanti atau cek pengaturan API key.";
   }
-
-  if (lower.includes("api key") || lower.includes("permission") || lower.includes("unauthorized") || lower.includes("forbidden")) {
-    return "GEMINI_API_KEY belum valid atau akses model belum aktif. Cek kembali API key di Vercel lalu redeploy.";
+  if (code === "PROVIDER_BUSY") {
+    return "AI sedang ramai. Coba ulang beberapa saat lagi.";
   }
-
-  if (lower.includes("not found") || lower.includes("not supported") || lower.includes("listmodels") || lower.includes("generatecontent")) {
+  if (code === "MODEL_NOT_SUPPORTED") {
     return "Tidak ada model Gemini yang cocok untuk generateContent pada API key ini.";
   }
-
-  return text || "AI belum tersedia.";
+  return String(message || "AI belum tersedia.");
 }
 
 async function wait(ms) {
@@ -94,6 +101,7 @@ async function requestJson(url, options = {}) {
   if (!response.ok) {
     const error = new Error(payload?.error?.message || "Request Gemini gagal.");
     error.status = response.status;
+    error.code = errorCode(error.message);
     throw error;
   }
 
@@ -145,6 +153,7 @@ async function resolveModels(apiKey) {
   if (!selected.length) {
     const error = new Error("Tidak ada model Gemini yang mendukung generateContent pada API key ini.");
     error.status = 503;
+    error.code = "MODEL_NOT_SUPPORTED";
     throw error;
   }
 
@@ -198,6 +207,7 @@ async function generateWithFallback(apiKey, prompt, maxOutputTokens, resolvedMod
 
   const finalError = new Error(normalizeGeminiError(lastError?.message));
   finalError.status = lastError?.status || 503;
+  finalError.code = lastError?.code || errorCode(lastError?.message);
   throw finalError;
 }
 
@@ -217,6 +227,11 @@ async function runHealthCheck(apiKey, resolvedModels) {
   };
 }
 
+function errorStatus(error) {
+  if (error?.code === "PROJECT_ACCESS_DENIED") return 403;
+  return error.status || 500;
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === "OPTIONS") {
@@ -234,7 +249,7 @@ export default async function handler(req, res) {
           envReady: false,
           envName: null,
           testUrl: "/api/ai?test=1",
-          version: "2.5.0"
+          version: "2.6.0"
         });
       }
 
@@ -249,7 +264,7 @@ export default async function handler(req, res) {
         selectedModels: resolvedModels.selected,
         test: test ? await runHealthCheck(apiKey, resolvedModels) : null,
         testUrl: "/api/ai?test=1",
-        version: "2.5.0"
+        version: "2.6.0"
       });
     }
 
@@ -305,8 +320,9 @@ ${answer}
       answer: answer || "AI belum memberi jawaban."
     });
   } catch (error) {
-    return sendJson(res, error.status || 500, {
+    return sendJson(res, errorStatus(error), {
       ok: false,
+      code: error.code || errorCode(error?.message),
       error: normalizeGeminiError(error?.message)
     });
   }
