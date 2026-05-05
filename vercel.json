@@ -2,7 +2,7 @@
   "version": 2,
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(assets|main.css|signature.css|app-core.js|app-core-v125.js|flow-ui.js|scan.js|ai-ui.js|manifest.webmanifest|service-worker.js)(.*)", "dest": "/$1$2" },
+    { "src": "/(assets|main.css|signature.css|manifest.webmanifest|service-worker.js)(.*)", "dest": "/$1$2" },
     { "src": "/.*", "dest": "/app.html" }
   ]
 }
